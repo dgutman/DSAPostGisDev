@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>dsaOpenSeaDragon_Demos</title>
+  <link rel="stylesheet" type="text/css" href="/style/overlaid.css">
+  <link rel="stylesheet" type="text/css" href="/node_modules/webix/webix.css">
+  <script src="/lib/openseadragon/openseadragon.min.js"></script>
+  <script src="/lib/openseadragon-svg-overlay.js"></script>
+  <script src="/node_modules/webix/webix.js"></script>
+  <script src="https://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>
+  <script src="/lib/d3.js"></script>
+  <script src="js/webixOSDViewer_helperFxns.js"></script>
+  <script src="js/views/spxDataSetLoader.js"></script>
+  <script src="color.js"></script>
+  <style>
+  .my_style {
+    font-style: italic;
+    font-size: 20px;
+  }
+
+  </style>
+  <script>
+  var config = {}
+  config['BASE_URL'] = "https://digitalslidearchive.emory.edu:8080/api/v1";
+
+  var btn_resetColors = {
+    view: "button",
+    id: "resetPainting",
+    value: "Reset Colors",
+    inputWidth: 100,
+    width: 200,
+    hotkey: "shift+r",
+    align: "left",
+    click: resetColors
+  }
+
+  var btn_loadTileData = {
+    view: "button",
+    id: "loadTileData",
+    value: "LoadFromServer",
+    inputWidth: 120,
+    width: 200,
+    hotkey: "shift+t",
+    align: "left",
+    click: function(id) {
+      $.getJSON("sampleTileGridData.json").then(function(data) {
+        console.log(data);
+        renderGrid(data.tileDataInfo, overlay)
+      })
+    }
+  }
+
+  function lookupSimilars(selectedRGBData, tileDataInfo) {
+    /*compute euclidean distance and show similar tiles...*/
+    /* Walk through the color tiles and paint all of the tiles that share the same color... */
+    //Currently selected tile kicks this off...
+    referenceRGB = colorToRGBArray(selectedRGBData);
+    referenceLAB = rgb2lab(referenceRGB);
+
+    d3.selectAll('.gutmansSquare').each(function(d) {
+      curTileColor = d3.select(this).attr('origColor');
+      useLab = true;
+      if (useLab) {
+        curLabColor = rgb2lab(colorToRGBArray(curTileColor))
+        colorDistance = deltaE(curLabColor, referenceLAB);
+      } else {
+        colorDistance = computeEuclideanDistance(colorToRGBArray(curTileColor), referenceRGB);
+      }
+
+      if (colorDistance < $$("similarityCutOff").getValue()) {
+        d3.select(this).style('fill', 'orange');
+        d3.select(this).style('opacity', 1)
+      } else {
+        d3.select(this).style('opacity', 0);
+      }
+    })
+  }
+
+  var btn_findSimilarTiles = {
+    view: "switch",
+    id: "findSimilarTiles",
+    value: "Find Similar",
+    onLabel: "on",
+    offLabel: "off",
+    label: "findSimilarTiles",
+    //inputWidth: 100,
+    hotkey: "shift+i",
+    align: "left",
+  }
+
+  var paintMode = {
+    view: "switch",
+    label: "paintMode",
+    onLabel: "on",
+    offLabel: "off",
+    value: 0,
+    id: "paintMode",
+    hotkey: "shift+y"
+  }
+
+  var btn_lookupSimilars = {
+    view: "button",
+    id: "lookupSimilars",
+    value: "LookupSimilars",
+    value: 0,
+    inputWidth: 100,
+    hotkey: "shift+s",
+    align: "left",
+    click: lookupSimilars
+  }
+
+  var startGridOpacity = 0.1;
+
+
+  var toolbar = {
+    view: "toolbar",
+    id: "myToolbar",
+    cols: [btn_resetColors, btn_loadTileData, btn_findSimilarTiles, paintMode]
+  }
+
+
+  var opacitySlider = {
+    view: "slider",
+    label: "gridOpacity",
+    value: startGridOpacity,
+    min: 0,
+    step: 0.05,
+    max: 1,
+    id: "gridOpacity",
+    on: {
+      "onChange": function(newv, oldv) {
+        d3.selectAll(".gutmansSquare").style('opacity', newv)
+      }
+    }
+  }
+
+  function handleMouseOver(d, i) { // Add interactivity
+    // Use D3 to select element, change color and size
+    d3.selectAll("#" + this.id).style("fill", "blue")
+    d3.selectAll("#" + this.id).style("opacity", "0.5")
+
+    origTileColor = d3.select(this).attr('origColor');
+    // fillColor =   d3.select(this).style('fill');
+
+    // console.log(origTileColor);
+    // console.log(d3.selectAll("#" + this.id));        
+
+    //    tileAvgColor = JSON.parse(d3.selectAll("#" + this.id).style('fill'))
+    tileAvgColor = d3.selectAll("#" + this.id).style('fill');
+    tileDataInfo = JSON.parse(d3.selectAll("#" + this.id).attr('tileDataInfo'))
+
+    colorLookupData = JSON.parse(d3.selectAll("#" + this.id).attr('colorLookupData'))
+    //this used to be colorlookupData
+    // console.log(colorLookupData,tileDataInfo);
+
+    //This should only run if I am in that mode..
+    if ($$("findSimilarTiles").getValue()) {
+      lookupSimilars(origTileColor, tileDataInfo);
+    } else if ($$("paintMode").getValue()) {
+      console.log("paint/....");
+    }
+
+    //THIS IS A DISASTER IN TERMS OF EFFICIENCY
+    //THIS ITERATION ALLOWS ME TO PAINT!!
+    $$("spxName").setValue(this.id);
+    $$("rgbChart").clearAll();
+
+    //need to reformat the HEX color and put it into the chart format
+    rgb = colorToRGBArray(origTileColor);
+    chartData = [{ "color": "red", "mean": rgb[0] }, { "color": "blue", "mean": rgb[1] }, { "color": "green", "mean": rgb[2] }]
+
+    //Convert the colorLookupData to the format the
+    $$("rgbChart").parse(chartData);
+  }
+
+
+  function addOverlay(tiles, overlayHandler) {
+    $.each(tiles, function(index, tile) {
+      fillColor = d3.schemeCategory20[index % 20];
+      //console.log(index, tile, fillColor);
+      d3.select(overlayHandler.node()).append("polygon")
+        .attr("points", tile.spxBoundaries)
+        .style('fill', fillColor) //was fillcolor
+        .attr('opacity', 0.8)
+        .attr('class', 'boundaryClass')
+        .attr('id', 'boundaryLI' + tile.label)
+        .attr('stroke', 'red')
+        .attr('stroke-width', 1)
+        .on('mouseover', handleMouseOver)
+        .on('mouseout', handleMouseOut);
+    });
+  }
+
+  function renderSquareGrid(gridPixelSize, overlayHandler) {
+    /* This will take the current viewer and generate a square grid on top */
+    d3.selectAll(".gutmansSquare").remove();
+    var tileWidth = gridPixelSize;
+    var tileIndex = 0;
+    var imageWidth = osdViewer.source.dimensions.x; //To Refactor-- viewer as global?
+    var imageHeight = osdViewer.source.dimensions.y;
+
+    for (i = 0; i < imageWidth / tileWidth; i++) {
+      for (j = 0; j < imageHeight / tileWidth; j++) {
+
+        topX = tileWidth * i;
+        topY = tileWidth * j;
+        width = tileWidth;
+        height = tileWidth;
+
+        pointArray = i * tileWidth + "," + j * tileWidth + " " +
+          i * tileWidth + "," + (j + 1) * tileWidth + " " +
+          (i + 1) * tileWidth + "," + (j + 1) * tileWidth + " " +
+          (i + 1) * tileWidth + "," + (j) * tileWidth + " " +
+          i * tileWidth + "," + j * tileWidth;
+
+        // d3.select(overlayHandler.node()).append("rect")
+        //     .attr('x', r.topX)
+        //     .attr('y', r.topY)
+        //     .attr('width', r.width)
+        //     .attr('height', r.width)
+
+        randInt = Math.floor(Math.random() * 20);
+        fillColor = d3.schemeCategory20[randInt % 20];
+
+        randColorLookup = genRandColorData();
+        randColorLookup = JSON.stringify(randColorLookup);
+
+        //how do I efficiently mind the opacity to the current opacity of the slider...
+
+        d3.select(overlayHandler.node()).append("polygon")
+          .attr('points', pointArray)
+          .style('fill', fillColor)
+          .attr('opacity', $$("gridOpacity").getValue())
+          .attr('class', 'gutmansSquare')
+          .attr('stroke', 'green')
+          .attr('stroke-width', 1)
+          .attr('id', 'grid-' + i + '-' + j)
+          .attr('origColor', fillColor) //need this if I want to switch color back
+          .attr('colorImgLookup', randColorLookup)
+          .on('mouseover', handleMouseOver)
+          .on('mouseout', handleMouseOut);
+      }
+      //NOTE I AM STORING THE random color data as a string...need to investigate this
+    }
+  }
+
+
+  function renderGrid(gridData, overlayHandler) {
+    /* This will take the current viewer and generate a square grid on top */
+    d3.selectAll(".gutmansSquare").remove();
+
+    var tileIndex = 0;
+    // randInt = Math.floor(Math.random() * 20);
+    // fillColor = d3.schemeCategory20[randInt % 20];
+    gridData.forEach(function(r, idx) {
+      console.log(r, idx);
+      randColorLookup = genRandColorData();
+      randColorLookup = JSON.stringify(randColorLookup);
+      //console.log(randColorLookup);
+      a = r.average;
+      // fillColor = d3.rgb(a[0], a[1], a[2]);
+      // console.log(fillColor);
+      fillColor = rgbToHex(parseInt(a[0]), parseInt(a[1]), parseInt(a[2]));
+      //console.log(fillColor);
+
+      d3.select(overlayHandler.node()).append("rect")
+        .attr('x', r.topX)
+        .attr('y', r.topY)
+        .attr('width', r.width)
+        .attr('height', r.width)
+        .style('fill', fillColor)
+        .attr('opacity', 1)
+        .attr('class', 'gutmansSquare')
+        .attr('stroke', 'blue')
+        .attr('stroke-width', 1)
+        .attr('id', 'grid-' + idx)
+        .attr('origColor', fillColor) //need this if I want to switch color back
+        .attr('colorImgLookup', randColorLookup)
+        .attr('tileDataInfo', r.tileDataInfo)
+        .on('mouseover', handleMouseOver)
+        .on('mouseout', handleMouseOut);
+    })
+  }
+  //NOTE I AM STORING THE random color data as a string...need to investigate this
+
+  var tileSizeSlider = {
+    view: "slider",
+    label: "gridSize",
+    value: 2048,
+    min: 512,
+    max: 5120,
+    step: 512,
+    title: "#value#",
+    id: "tileSizeSlider",
+    on: {
+      "onChange": function(newv, oldv) {
+        renderSquareGrid(newv, overlay)
+      }
+    }
+  };
+
+  var overlay = {};
+  //for now this is a global object--- probably need to figure out how to clean this up
+  function viewerOpened(id) {
+    console.log(this);
+    renderSquareGrid($$("tileSizeSlider").getValue(), overlay);
+  }
+
+
+  var rgbChart = {rows: [ { type:"header", template:"Current Feature Set/RGB"},
+  {
+    view: "chart",
+    id: "rgbChart",
+    type: "bar",
+    value: "#mean#",
+    color: "#color#",
+    border: true,
+    xAxis: {
+      template: "#color#"
+    },
+    yAxis: {
+      start: 0,
+      end: 255,
+      step: 25
+    },gravity:5,
+    },
+    { id:"avgColor", view:"button", label:"theAVGColor", 
+          css: {   
+            "background": "#396D9E",
+                  "border-radius": "4px", "-webkit-border-radius": "4px", "-moz-border-radius":
+                      "4px", "border": "1px",  "solid":"#3D7113"}
+
+        }]
+    // data: [{ "color": "red", "mean": 128 }, { "color": "blue", "mean": 55 }, { "color": "green", "mean": 222 }]
+  };
+
+  var similarityCutOff = {
+    view: "slider",
+    id: "similarityCutOff",
+    value: 5,
+    min: 0,
+    max: 255,
+    step: 5,
+    title: "#value#",
+    on: {
+      onChange: function(newv, oldv) { webix.message("Something slid" + newv) }
+    }
+  }
+
+  webix.ready(function() {
+    osdViewer = OpenSeadragon({
+      // container: document.querySelector(".viewer-container"),
+      id: "osdContainer",
+      prefixUrl: "/lib/openseadragon/images/",
+      //      tileSources: { tileSource: tcgaSPXExample, width: tcgaSPXExample.width }
+   //   tileSources: { tileSource: tcgaCoadExample, width: tcgaCoadExample.width }
+    });
+
+    $.getJSON("http://localhost:82/getImageList").then(function(data) {
+      // $.getJSON("multiPatientGridData.json").then(function(data) {
+      //console.table(data);
+      $$("dataSetCombo").getPopup().getList().clearAll();
+      $$("dataSetCombo").getPopup().getList().parse(data);
+      id = $$("dataSetCombo").getPopup().getList().getFirstId();
+
+      dsList = $$("dataSetCombo").getPopup().getList();
+      itemData = dsList.getItem(id);
+      $$("dataSetCombo").setValue(id);
+
+        //TBD.. do I get grid data here??
+        $.getJSON("http://localhost:82/getFeatureSets?imageId="+itemData.imageId).then( function(featureSetsData){
+             console.log(data)
+            // console.log("Should have gotten grid data?")
+           var   featureData =   [{
+    "segmentType": "grid", 
+    "tileSizeFullRes": 1024, 
+    "downSampleFactor": 64,
+    "gridData": data 
+              }]
+
+              $$("gridSizeDataTable").parse(featureSetsData)
+
+        })
+
+   
+    })
+
+    //$$(this).getPopup().getList().getItem(id);
+    osdViewer.addHandler("open", viewerOpened);
+    overlay = osdViewer.svgOverlay();
+
+    var dsaSpxHeader = { view: "label", type: "header", css: "my_style", label: "dsaSuperPixelViewer", align: "center" }
+
+    webix.ui({
+      rows: [dsaSpxHeader,
+        toolbar,
+        {
+          cols: [{
+              rows: [
+                tileSizeSlider,
+                opacitySlider,
+                dataSelector,
+                similarityCutOff
+              ],
+              gravity: 0.4
+            },
+            {
+              content: "osdContainer"
+            },
+            {
+              rows: [
+                { view: "label", id: "spxName", label: "spxName", value: "1" },
+                rgbChart,
+                {}
+              ],
+              gravity: 0.2
+            }
+          ]
+        }
+      ]
+    })
+
+    //hot keys for the component with 'details' ID
+    webix.UIManager.addHotKey("shift+p", function() {
+      $$("paintMode").toggle();
+      return false;
+    });
+
+    webix.UIManager.addHotKey("shift+l", function() {
+      $$("findSimilarTiles").toggle();
+      return false;
+    });
+
+    ///call the square tile renderer as well 
+    // addOverlay(reformattedSpxData, overlay);
+  })
+
+  </script>
+</head>
+
+<body style="width:100%; height:100%">
+  <div id="osdContainer" style="width:100%; height:100%">
+    <div id="osdViewer1" style="width:800px;height:600px" class="viewer-container openseadragon"></div>
+  </div>
+</body>
+<script src="/reload/reload.js"></script>
+
+</html>
+<!--   //We need to conver tthe goofy format of the raw Spx Data into some form of an
+  //array so I can render it using D3.. eventually this will of course come in the proper format
+  // reformattedSpxData = []
+  // TCGASpxArray.split('\n').forEach(function(spxData, idx) {
+  // //we also now need to scale each point by a factor of X...
+  // spxBoundaries = spxData.split("\t")[3]
+  // //YEAH X and Y are inverted!!
+  // reorderedSpxString = []
+  // scaleFactor = 2;
+  // spxPtArray = spxBoundaries.split(" ").forEach(function(spx, i) {
+  // xyData = spx.split(",")
+  // if (xyData.length == 2) {
+  // reorderedSpxString.push(xyData[1] * scaleFactor + "," + xyData[0] * scaleFactor)
+  // }
+  // })
+  // reformattedSpxData.push({ label: idx, spxBoundaries: reorderedSpxString.join(" ") })
+  // })
+ -->
