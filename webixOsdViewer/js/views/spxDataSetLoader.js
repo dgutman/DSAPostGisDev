@@ -1,9 +1,6 @@
-/*This view will load data from a static JSON file for now... but eventually will grab data from
-a girder instance...*/
 
 
 var dsHeader = { view: "template", type: "header", template: "Select Data" };
-
 var dataSelector = { id: "dataSelector", rows: [dsHeader] }
 
 var dataSelector = dsHeader;
@@ -12,7 +9,7 @@ myDataSetItem = {}
 var dataSetCombo = {
   view: "combo",
   id: "dataSetCombo",
-  url: "http://localhost:82/getImageList/",//'multiPatientGridData.json",
+  url: "http://localhost:82/getImageList/",
   options: { body: { template: "#imageName#" } },
   on: {
     onChange: function(id) {
@@ -28,16 +25,11 @@ var dataSetCombo = {
         console.log(getTileFeatureUrl)
           $.getJSON(getTileFeatureUrl).then(function(tileGridData) {
             console.log(tileGridData)
-          var   featureData =   [{
-            "segmentType": "grid", 
-            "tileSizeFullRes": 1024, 
-            "downSampleFactor": 64,
-            "gridData": tileGridData 
-                      }]
+          
                       $$("gridSizeDataTable").clearAll()	
-                      console.log(featureData)
+                      console.log(tileGridData)
 
-                      $$("gridSizeDataTable").parse(featureData)
+                      $$("gridSizeDataTable").parse(tileGridData)
           
           // renderGrid(data.tileDa
             })
@@ -60,9 +52,13 @@ var gridSizeSelector = {
           webix.message("table was clicked")
           item = $$(this).getItem(id);
           console.log(item);
-          renderGrid(item.gridData,overlay);
+          
+          $.getJSON("http://localhost:82/getTileFeatures?imageId="+item.imageId+"&ftxtract_id="+item.ftxtract_id).
+            then( function(featureData) {
+          console.log(featureData)
+          renderGrid(featureData,overlay);
 
-
+          })
 		
         }
       }
