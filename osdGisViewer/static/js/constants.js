@@ -7,4 +7,7 @@ export default {
   IMAGE_LIST_URL: "http://localhost:82/getImageList",
   FEATURE_LIST_URL: "http://localhost:82/getFeatureSets",
   TILE_FEATURES_URL: "http://localhost:82/getTileFeatures",
+  SIMILAR_FEATURES_URL: "http://localhost:82/computeFeatureDistance",
+
+  GRID_START_OPACITY: 0.4,
 };

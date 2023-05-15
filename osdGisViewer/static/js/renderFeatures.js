@@ -1,4 +1,5 @@
 /*This will deal with overlays to render features we pull from the database */
+import constants from "./constants.js";
 
 function componentToHex(c) {
   var hex = c.toString(16);
@@ -22,12 +23,58 @@ function genRandColorData() {
   return rgbColorData;
 }
 
+function findSimilarTiles(avgColor, refFeatureId) {
+  /* Query the backend server and pull tiles within some distance threshold */
+  var distanceThresh = webix.$$("similarityCutOff").getValue();
+  var selectedFeatureSet = webix.$$("featureSetTable").getSelectedItem();
+
+  var ftxract_id = webix.$$("featureSetTable").getSelectedItem().ftxract_id;
+  console.log(selectedFeatureSet);
+  console.log(avgColor, distanceThresh, ftxract_id);
+  //console.log(selectedFeatureSet);
+  console.log(ftxract_id);
+
+  $.getJSON(
+    constants.SIMILAR_FEATURES_URL +
+      "?ftxtract_id=" +
+      22 +
+      "&distanceThresh=" +
+      distanceThresh +
+      "&refFeatureId=" +
+      refFeatureId
+  ).then((similarFeatureData) => {
+    //    console.table(similarFeatureData);
+  });
+
+  // ).then((featureData) => {
+  //   // console.table(featureData);
+  //   currentFeatureData.parse(featureData); //Update local copy so I can run stats
+  //   renderFeatures.renderGrid(featureData, overlay);
+  // });
+
+  //fxtract_id
+}
+
 function handleMouseOver(d, i) {
   // Add interactivity
   // Use D3 to select element, change color and size
-  //  console.log(this.id);
+  //console.log(this )
+  var avgColor = this.getAttribute("averageColor");
+  var localTileId = this.getAttribute("localTileId");
 
-  webix.$$("mouseTrackerBox").setHTML(this.id);
+  webix
+    .$$("mouseTrackerBox")
+    .setHTML(
+      "<div style='background-color:rgb(" +
+        avgColor +
+        ")'>" +
+        this.id +
+        "</div>"
+    );
+
+  /* this is the logic that grabs the tile data and passes it to compute similarity */
+
+  findSimilarTiles(avgColor, localTileId);
 
   //   d3.selectAll("#" + this.id).style("fill", "blue");
   //   d3.selectAll("#" + this.id).style("opacity", "0.5");
@@ -101,7 +148,9 @@ function renderGrid(gridData, overlayHandler) {
       .attr("id", "grid-" + idx)
       .attr("origColor", fillColor) //need this if I want to switch color back
       .attr("colorImgLookup", randColorLookup)
+      .attr("averageColor", a)
       .attr("tileDataInfo", r.tileDataInfo)
+      .attr("localTileId", r.localTileId)
       .on("mouseover", handleMouseOver);
     // .on("mouseout", handleMouseOut);
   });

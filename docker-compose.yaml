@@ -1,6 +1,5 @@
 version: "3"
 volumes:
-  postgis-data:
   postgis-data-volume:
 services:
   mongodb:
@@ -19,12 +18,10 @@ services:
       options:
         max-size: "10M"
         max-file: "5"
-
   postgisdb:
     image: postgis/postgis
     volumes:
-      - postgis-data:/opt/postgres/data
-
+      - postgis-data-volume:/var/lib/postgresql/data
     environment:
       # If you need to create multiple database you can add coma separated databases eg gis,data
       - POSTGRES_DB=dsagis
@@ -32,7 +29,7 @@ services:
       - POSTGRES_PASS=docker
       - ALLOW_IP_RANGE=0.0.0.0/0
       - POSTGRES_HOST_AUTH_METHOD=trust ## Not necessarily the best idea longterm..
-      - DATADIR=/opt/postgres/data
+      #- DATADIR=/opt/postgres/data
       # Add extensions you need to be enabled by default in the DB. Default are the five specified below
       - POSTGRES_MULTIPLE_EXTENSIONS=postgis,hstore,postgis_topology,postgis_raster,pgrouting
     ports:
@@ -40,7 +37,6 @@ services:
     restart: on-failure
     healthcheck:
       test: "exit 0"
-
   datascience-notebook:
     container_name: dsapostgisnb
     build: dsapostgisnb/
@@ -62,14 +58,28 @@ services:
       PGADMIN_DEFAULT_PASSWORD: dsagis
     links:
       - postgisdb
+    depends_on:
+      - postgisdb
   fastapi:
     container_name: dsapostgisapi
     build: fastapi/
+    command: bash -c 'while !</dev/tcp/postgisdb/5432; do sleep 1; done; uvicorn app.main:app --host 0.0.0.0 --port 82 --reload'
     ports:
-      - '82:82'
+      - "82:82"
     expose:
       - "82"
     depends_on:
       - postgisdb
     volumes:
       - ${PWD}/fastapi/app:/code/app
+  osdgisviewer:
+    build: osdGisViewer/
+    expose:
+      - "3000"
+      - "35729" # For livereload
+    container_name: osdgisviewer
+    ports:
+      - "3000:3000"
+      - "35729:35729"
+    volumes:
+      - ${PWD}/osdGisViewer:/app

@@ -9,6 +9,8 @@ import numpy as np
 import random, requests
 import girder_client
 from typing import List
+from .utils import computeColorSimilarityForFeatureSet
+
 
 from .services import engine, create_db_and_tables
 from .models import (
@@ -48,9 +50,7 @@ async def delete_tileFeatures(imageId: str, ftxtract_id: int):
     """This will delete tiles associated with an image in case I want to regenerate them"""
     with Session(engine) as session:
         statement = (
-            delete(tileFeatures)
-            .where(tileFeatures.imageId == imageId)
-            .where(tileFeatures.ftxtract_id == ftxtract_id)
+            delete(tileFeatures).where(tileFeatures.imageId == imageId).where(tileFeatures.ftxtract_id == ftxtract_id)
         )
         result = session.exec(statement)
         session.commit()
@@ -76,6 +76,7 @@ async def get_tileFeatures(imageId: str, ftxtract_id: int):
                     tileFeatures.width,
                     tileFeatures.height,
                     tileFeatures.average,
+                    tileFeatures.localTileId,
                 )
             )
             .limit(10000)
@@ -92,12 +93,34 @@ async def get_featureSets(
 ):
     ### Get all the feature sets available for a given image
     with Session(engine) as session:
-        featureSets = (
-            session.query(featureExtractionParams)
-            .filter(featureExtractionParams.imageId == imageId)
+        featureSets = session.query(featureExtractionParams).filter(featureExtractionParams.imageId == imageId).all()
+
+        return featureSets
+    return None
+
+
+@app.get("/computeFeatureDistance")
+async def get_computeFeatureDistance(ftxtract_id: int, distanceThresh: float, refFeatureId: str):
+    ### Given a ftxtract_id and a reference vector, and a distance
+    ### Compute which tiles (or features) are within the defined metric
+    with Session(engine) as session:
+        featureSelectedData = (
+            session.query(tileFeatures)
+            .filter(tileFeatures.ftxtract_id == ftxtract_id)
+            .options(load_only(tileFeatures.imageId, tileFeatures.localTileId, tileFeatures.average))
             .all()
         )
-        return featureSets
+
+        refFeatureVector = (
+            session.query(tileFeatures)
+            .filter(tileFeatures.ftxtract_id == ftxtract_id)
+            .filter(tileFeatures.localTileId == refFeatureId)
+            .options(load_only(tileFeatures.average))
+            .all()
+        )
+
+        ftrDistances = computeColorSimilarityForFeatureSet(featureSelectedData, refFeatureVector, distanceThresh)
+        return ftrDistances
     return None
 
 
@@ -109,9 +132,7 @@ async def insert_featureExtractionParams(featXtractParams: featureExtractionPara
             session.query(featureExtractionParams)
             .filter(featureExtractionParams.imageId == featXtractParams.imageId)
             .filter(featureExtractionParams.tileWidth == featXtractParams.tileWidth)
-            .filter(
-                featureExtractionParams.magnification == featXtractParams.magnification
-            )
+            .filter(featureExtractionParams.magnification == featXtractParams.magnification)
             .first()
         )
         if exist:
@@ -126,12 +147,8 @@ async def insert_featureExtractionParams(featXtractParams: featureExtractionPara
 
 
 @app.post("/lookupFeatureExtractionParams")
-async def lookup_featureExtractionParams(
-    imageId: str, magnification: float, tileSizeParam: str
-):
-    print(
-        "This will determine if a set of feature extractions have already been run at this resolution"
-    )
+async def lookup_featureExtractionParams(imageId: str, magnification: float, tileSizeParam: str):
+    print("This will determine if a set of feature extractions have already been run at this resolution")
     with Session(engine) as session:
         exist = (
             session.query(featureExtractionParams)
@@ -150,9 +167,7 @@ async def lookup_featureExtractionParams(
 @app.get("/lookupImage")
 async def lookupImage(imageName: str, dsaApiUrl: str):
     with Session(engine) as session:
-        imageInfo = (
-            session.query(DSAImage).filter(DSAImage.imageName == imageName).first()
-        )
+        imageInfo = session.query(DSAImage).filter(DSAImage.imageName == imageName).first()
         # return imageInfo
         return imageInfo
 

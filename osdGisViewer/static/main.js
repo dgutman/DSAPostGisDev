@@ -1,9 +1,7 @@
 import constants from "./js/constants.js";
 import renderFeatures from "./js/renderFeatures.js";
-
+import similarityCompute from "./js/similarityCompute.js";
 // import ajaxActions from "./services/ajaxActions";
-
-console.log(renderFeatures.rgbToHex(1, 2, 3));
 
 /* Basic initialization for all webix components */
 var osdViewer = OpenSeadragon({
@@ -19,6 +17,9 @@ function viewerOpened() {
 
 osdViewer.addHandler("open", viewerOpened);
 var overlay = osdViewer.svgOverlay();
+
+let currentFeatureData = new webix.DataCollection({ id: "currentFeatureData" }); //While I am putting the feature data into the overlay
+//I am also keeping a copy in case I need to reprocess things
 
 /* TO DO: See how to better scope the overlay object, I think maybe I can grab it from the viewer */
 function buildImageTileSource(imageInfo) {
@@ -52,6 +53,43 @@ var imageSelector = {
     },
   },
 };
+
+var similarityCutOff = {
+  view: "slider",
+  id: "similarityCutOff",
+  label: "SimCutOff",
+  value: 5,
+  min: 0,
+  max: 255,
+  step: 5,
+  inputWidth: 200,
+  labelWidth: 100,
+  title: "#value#",
+  on: {
+    onChange: function (newv, oldv) {
+      webix.message("Something slid" + newv);
+    },
+  },
+};
+
+var opacitySlider = {
+  view: "slider",
+  label: "gridOpacity",
+  value: constants.START_GRID_OPACITY,
+  inputWidth: 200,
+  labelWidth: 100,
+  min: 0,
+  step: 0.05,
+  max: 1,
+  id: "gridOpacity",
+  on: {
+    onChange: function (newv, oldv) {
+      d3.selectAll(".gutmansSquare").style("opacity", newv);
+    },
+  },
+};
+
+var featureDataStore = { view: "datastore", id: "featureDataStore" };
 
 var dsaSpxHeader = {
   view: "label",
@@ -90,6 +128,7 @@ var featureSetSelector = {
               item.ftxtract_id
           ).then((featureData) => {
             // console.table(featureData);
+            currentFeatureData.parse(featureData); //Update local copy so I can run stats
             renderFeatures.renderGrid(featureData, overlay);
           });
         },
@@ -103,13 +142,14 @@ var mouseInfoBox = {
   id: "mouseTrackerBox",
   label: "Active ROI",
   value: "1",
+  inputWidth: 150,
 };
 
 var main_layout = {
   rows: [
     dsaSpxHeader,
     {
-      cols: [imageSelector, mouseInfoBox],
+      cols: [imageSelector, mouseInfoBox, opacitySlider, similarityCutOff],
     },
     {
       cols: [

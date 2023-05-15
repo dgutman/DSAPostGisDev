@@ -1,3 +1,4 @@
+
 FROM python:3.9
 
 WORKDIR /code
@@ -5,6 +6,9 @@ WORKDIR /code
 COPY ./requirements.txt /code/requirements.txt
 
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install colormath
+## TO DO, figure out the version and just put it in the requirements
 
 COPY ./app /code/app
 

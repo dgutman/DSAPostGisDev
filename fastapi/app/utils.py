@@ -1,11 +1,24 @@
+import numpy
+
 import numpy as np
+from colormath.color_objects import sRGBColor, LabColor
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie2000
+
+
+def patch_asscalar(a):
+    return a.item()
+
+
+setattr(numpy, "asscalar", patch_asscalar)
+
 
 R = 6371
+
 
 def build_adress(x):
     adress = x["adress"].lower() + " " + str(x["cp"]) + " " + x["city"].lower()
     adress = " ".join([e.capitalize() if len(e) >= 3 else e for e in adress.split(" ")]).replace(" l ", " l'")
-
     adress = "-".join([e[0].upper() + e[1:] if len(e) >= 3 else e for e in adress.split("-")])
 
     return pretify_address(adress)
@@ -48,3 +61,26 @@ def extend_dict(x_, avg, clat, clon):
         "longitude": x_["longitude"],
     }
 
+
+def computeColorSimilarityForFeatureSet(featureSet, refFeatureVector, distanceThreshold):
+    ### This expects a featureset, in this case it will simply be the average color for each tile
+    ## I also am passing the referenceColor (i.e. feature) separately... this should then go through each individual
+    ## feature and convert it to LAB space and use the colormath library to compute the delta_e score
+    ## In the futurue I may want to look into cython or HIT
+    """referenceColor: [Array]"""
+
+    referenceColor = [240, 220, 240]
+
+    refColor_rgb = sRGBColor(
+        float(referenceColor[0]), float(referenceColor[1]), float(referenceColor[2]), is_upscaled=True
+    )
+    refColor_lab = convert_color(refColor_rgb, LabColor)
+
+    tilesInRange = []  ### This will store the tiles that are within the specified unit distance and also their ID
+    for i in featureSet:
+        tileColor_rgb = sRGBColor(i.average[0], i.average[1], i.average[2], is_upscaled=True)
+        tileColor_lab = convert_color(tileColor_rgb, LabColor)
+        delta_e = delta_e_cie2000(refColor_lab, tileColor_lab)
+        tilesInRange.append((i.localTileId, delta_e))
+
+    return tilesInRange

@@ -37,6 +37,7 @@ class tileFeatures(SQLModel, table=True):
     height: int
     featureType: str  ### Should be something like imgHistogram
     ftxtract_id: int
+    localTileId: str  ## This is most likely the tilePosition in the current run
     red: Optional[List[int]] = Field(
         default=None, sa_column=Column(postgresql.ARRAY(Integer()))
     )
