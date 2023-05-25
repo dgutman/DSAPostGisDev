@@ -6,7 +6,7 @@ RUN pip install large-image[all] --find-links https://girder.github.io/large_ima
 RUN pip install pymongo 
 RUN python -m pip install "dask[distributed]" --upgrade 
 
-RUN pip install colormath
+RUN pip install colormath pgvector sqlmodel psycopg2 geoalchemy2
 EXPOSE 8888
 RUN mkdir /app
 WORKDIR /app

@@ -13,12 +13,7 @@ from .utils import computeColorSimilarityForFeatureSet
 
 
 from .services import engine, create_db_and_tables
-from .models import (
-    SimpleRectangles,
-    DSAImage,
-    tileFeatures,
-    featureExtractionParams,
-)
+from .models import SimpleRectangles, DSAImage, tileFeatures, featureExtractionParams, imageFeatureSets, NPfeatureSet
 from .utils import extend_dict, pretify_address
 
 app = FastAPI()
@@ -60,14 +55,14 @@ async def delete_tileFeatures(imageId: str, ftxtract_id: int):
 
 ## TO DO: Add optinoal parameter that will return all fields, not just the ones listed below
 @app.get("/getTileFeatures")
-async def get_tileFeatures(imageId: str, ftxtract_id: int):
+async def get_tileFeatures(ftxtract_id: int):
     # print("Getting tile features based on internal imageId")
 
     with Session(engine) as session:
         tileData = (
             session.query(tileFeatures)
             .filter(tileFeatures.ftxtract_id == ftxtract_id)
-            .filter(tileFeatures.imageId == imageId)
+            # .filter(tileFeatures.imageId == imageId)
             .options(
                 load_only(
                     tileFeatures.imageId,
@@ -87,13 +82,43 @@ async def get_tileFeatures(imageId: str, ftxtract_id: int):
     return None
 
 
-@app.get("/getFeatureSets")
-async def get_featureSets(
-    imageId: str,
-):
-    ### Get all the feature sets available for a given image
+@app.get("/getNPfeatures")
+async def get_NPfeatures(imageFeatureSet_id: int):
+    # print("Getting tile features based on internal imageId")
+
     with Session(engine) as session:
-        featureSets = session.query(featureExtractionParams).filter(featureExtractionParams.imageId == imageId).all()
+        NPfeatureData = (
+            session.query(NPfeatureSet)
+            .filter(NPfeatureSet.imageFeatureSet_id == imageFeatureSet_id)
+            # .filter(tileFeatures.imageId == imageId)
+            # .options(
+            #     load_only(
+            #         tileFeatures.imageId,
+            #         tileFeatures.topX,
+            #         tileFeatures.topY,
+            #         tileFeatures.width,
+            #         tileFeatures.height,
+            #         tileFeatures.average,
+            #         tileFeatures.localTileId,
+            #     )
+            # )
+            .limit(10000)
+            .all()
+        )
+        return NPfeatureData
+
+    return None
+
+
+@app.get("/getFeatureSets")
+async def get_featureSets(imageId: str):  # , featureType: str, imageFeatureSet_id: int):
+    ### Get all the feature sets available for a given image
+    # if featureType == "nftFeature":
+    #     with Session(engine) as session:
+    #         nftFeatureSet = session.query(NPfeatureSet).filter(NPfeatureSet.imageFeatureSet_id == imageFeatureSet_id)
+    #         return None
+    with Session(engine) as session:
+        featureSets = session.query(imageFeatureSets).filter(imageFeatureSets.imageId == imageId).all()
 
         return featureSets
     return None
@@ -116,10 +141,11 @@ async def get_computeFeatureDistance(ftxtract_id: int, distanceThresh: float, re
             .filter(tileFeatures.ftxtract_id == ftxtract_id)
             .filter(tileFeatures.localTileId == refFeatureId)
             .options(load_only(tileFeatures.average))
-            .all()
+            .first()
         )
-
-        ftrDistances = computeColorSimilarityForFeatureSet(featureSelectedData, refFeatureVector, distanceThresh)
+        ftrDistances = computeColorSimilarityForFeatureSet(
+            featureSelectedData, refFeatureVector.average, distanceThresh
+        )
         return ftrDistances
     return None
 
@@ -167,6 +193,7 @@ async def lookup_featureExtractionParams(imageId: str, magnification: float, til
 @app.get("/lookupImage")
 async def lookupImage(imageName: str, dsaApiUrl: str):
     with Session(engine) as session:
+        print(imageName)
         imageInfo = session.query(DSAImage).filter(DSAImage.imageName == imageName).first()
         # return imageInfo
         return imageInfo
@@ -180,38 +207,40 @@ async def add_DSAImage(imageId: str, dsaApiUrl: str):
         exist = session.query(DSAImage).filter(DSAImage.imageId == imageId).first()
         ## Not sure if I want to throw an error if the item exists already
         ## May also want to eventually allow items to be updated if forced.
-        gc = girder_client.GirderClient(apiUrl=dsaApiUrl)
-        ## Throw an exception if girder client fails.. add in the future
 
-        try:
-            ## TO DO ADD SOMETHING THAT MAKES SURE THE SERVER IS EVEN ACCESSIBLE...
+        if not exist:
+            gc = girder_client.GirderClient(apiUrl=dsaApiUrl)
+            ## Throw an exception if girder client fails.. add in the future
 
-            resp = requests.get(dsaApiUrl, timeout=1)
-            ### Adding this to make sure server is accessible, otherwise this just hangs
-            itemInfo = gc.get(f"item/{imageId}")
-            tileData = gc.get(f"item/{imageId}/tiles")
+            try:
+                ## TO DO ADD SOMETHING THAT MAKES SURE THE SERVER IS EVEN ACCESSIBLE...
 
-            imageItem = DSAImage(
-                imageName=itemInfo["name"],
-                apiURL=dsaApiUrl,
-                imageId=imageId,
-                magnification=tileData["magnification"],
-                mm_x=tileData["mm_x"],
-                mm_y=tileData["mm_y"],
-                sizeX=tileData["sizeX"],
-                sizeY=tileData["sizeY"],
-                levels=tileData["levels"],
-                tileWidth=tileData["tileWidth"],
-                tileHeight=tileData["tileHeight"],
-            )
+                resp = requests.get(dsaApiUrl, timeout=1)
+                ### Adding this to make sure server is accessible, otherwise this just hangs
+                itemInfo = gc.get(f"item/{imageId}")
+                tileData = gc.get(f"item/{imageId}/tiles")
 
-            session.add(imageItem)
-            session.commit()
-            session.refresh(imageItem)
-            return imageItem
+                imageItem = DSAImage(
+                    imageName=itemInfo["name"],
+                    apiURL=dsaApiUrl,
+                    imageId=imageId,
+                    magnification=tileData["magnification"],
+                    mm_x=tileData["mm_x"],
+                    mm_y=tileData["mm_y"],
+                    sizeX=tileData["sizeX"],
+                    sizeY=tileData["sizeY"],
+                    levels=tileData["levels"],
+                    tileWidth=tileData["tileWidth"],
+                    tileHeight=tileData["tileHeight"],
+                )
 
-        except:
-            print("Having an issue with one of the DSA servers")
+                session.add(imageItem)
+                session.commit()
+                session.refresh(imageItem)
+                return imageItem
+
+            except:
+                print("Having an issue with one of the DSA servers")
 
     return None
 

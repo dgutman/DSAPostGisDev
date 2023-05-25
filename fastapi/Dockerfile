@@ -7,7 +7,7 @@ COPY ./requirements.txt /code/requirements.txt
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install colormath
+RUN pip install colormath pgvector
 ## TO DO, figure out the version and just put it in the requirements
 
 COPY ./app /code/app
