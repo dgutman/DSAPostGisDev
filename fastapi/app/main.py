@@ -190,6 +190,24 @@ async def lookup_featureExtractionParams(imageId: str, magnification: float, til
     return None
 
 
+@app.post("/getFeatureSetId")
+async def get_featureSetId(imageId: str, magnification: float, tileSizeParam: str):
+    print("This will determine if a set of feature extractions have already been run at this resolution")
+    with Session(engine) as session:
+        exist = (
+            session.query(featureExtractionParams)
+            .filter(featureExtractionParams.imageId == imageId)
+            .filter(featureExtractionParams.tileSizeParam == tileSizeParam)
+            .filter(featureExtractionParams.magnification == magnification)
+            .first()
+        )
+        if exist:
+            return exist
+        else:
+            return None
+    return None
+
+
 @app.get("/lookupImage")
 async def lookupImage(imageName: str, dsaApiUrl: str):
     with Session(engine) as session:
@@ -241,6 +259,8 @@ async def add_DSAImage(imageId: str, dsaApiUrl: str):
 
             except:
                 print("Having an issue with one of the DSA servers")
+        else:
+            return exist
 
     return None
 

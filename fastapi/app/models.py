@@ -12,7 +12,6 @@ class DSAImage(SQLModel, table=True, extend_existing=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     apiURL: str
     imageId: str = Field(sa_column=Column("imageId", String, unique=True))
-
     imageName: str
     levels: int
     magnification: float
@@ -93,6 +92,18 @@ class MoreSimpleRectangles(SQLModel, table=True):
     shapeName: str
     shapeLabel: str
     shapeLocation: Optional[Any] = Field(sa_column=Column(Geometry("GEOMETRY")))
+
+
+class featureSetExtractionParams(SQLModel, table=True, extend_existing=True):
+    featureSet_id: int = Field(primary_key=True, default=None)
+    featureType: str
+    featureSetComputeTime: float
+    bytesRead: Optional[int] = Field(sa_column=Column(BigInteger()), default=None)
+    imageId: str
+    totalObjects: int
+    magnification: Optional[float]
+    extractionParams: dict = Field(sa_column=Column(JSON), default={})
+    resultsFileMD5 = str
 
 
 class featureExtractionParams(SQLModel, table=True, extend_existing=True):
