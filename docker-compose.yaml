@@ -12,7 +12,7 @@ services:
       - ./db:/data/db
     ports:
       - "27017" ## Commend if you do not want anything outside of docker compose to connect
-    command: --nojournal --maxConns 1000
+    command: --maxConns 1000
 
     logging:
       options:
