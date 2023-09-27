@@ -13,7 +13,14 @@ from .utils import computeColorSimilarityForFeatureSet
 
 
 from .services import engine, create_db_and_tables
-from .models import SimpleRectangles, DSAImage, tileFeatures, featureExtractionParams, imageFeatureSets, NPfeatureSet
+from .models import (
+    SimpleRectangles,
+    DSAImage,
+    tileFeatures,
+    featureExtractionParams,
+    imageFeatureSets,
+    NPfeatureSet,
+)
 from .utils import extend_dict, pretify_address
 
 app = FastAPI()
@@ -45,7 +52,9 @@ async def delete_tileFeatures(imageId: str, ftxtract_id: int):
     """This will delete tiles associated with an image in case I want to regenerate them"""
     with Session(engine) as session:
         statement = (
-            delete(tileFeatures).where(tileFeatures.imageId == imageId).where(tileFeatures.ftxtract_id == ftxtract_id)
+            delete(tileFeatures)
+            .where(tileFeatures.imageId == imageId)
+            .where(tileFeatures.ftxtract_id == ftxtract_id)
         )
         result = session.exec(statement)
         session.commit()
@@ -111,28 +120,40 @@ async def get_NPfeatures(imageFeatureSet_id: int):
 
 
 @app.get("/getFeatureSets")
-async def get_featureSets(imageId: str):  # , featureType: str, imageFeatureSet_id: int):
+async def get_featureSets(
+    imageId: str,
+):  # , featureType: str, imageFeatureSet_id: int):
     ### Get all the feature sets available for a given image
     # if featureType == "nftFeature":
     #     with Session(engine) as session:
     #         nftFeatureSet = session.query(NPfeatureSet).filter(NPfeatureSet.imageFeatureSet_id == imageFeatureSet_id)
     #         return None
     with Session(engine) as session:
-        featureSets = session.query(imageFeatureSets).filter(imageFeatureSets.imageId == imageId).all()
+        featureSets = (
+            session.query(imageFeatureSets)
+            .filter(imageFeatureSets.imageId == imageId)
+            .all()
+        )
 
         return featureSets
     return None
 
 
 @app.get("/computeFeatureDistance")
-async def get_computeFeatureDistance(ftxtract_id: int, distanceThresh: float, refFeatureId: str):
+async def get_computeFeatureDistance(
+    ftxtract_id: int, distanceThresh: float, refFeatureId: str
+):
     ### Given a ftxtract_id and a reference vector, and a distance
     ### Compute which tiles (or features) are within the defined metric
     with Session(engine) as session:
         featureSelectedData = (
             session.query(tileFeatures)
             .filter(tileFeatures.ftxtract_id == ftxtract_id)
-            .options(load_only(tileFeatures.imageId, tileFeatures.localTileId, tileFeatures.average))
+            .options(
+                load_only(
+                    tileFeatures.imageId, tileFeatures.localTileId, tileFeatures.average
+                )
+            )
             .all()
         )
 
@@ -158,7 +179,9 @@ async def insert_featureExtractionParams(featXtractParams: featureExtractionPara
             session.query(featureExtractionParams)
             .filter(featureExtractionParams.imageId == featXtractParams.imageId)
             .filter(featureExtractionParams.tileWidth == featXtractParams.tileWidth)
-            .filter(featureExtractionParams.magnification == featXtractParams.magnification)
+            .filter(
+                featureExtractionParams.magnification == featXtractParams.magnification
+            )
             .first()
         )
         if exist:
@@ -173,8 +196,12 @@ async def insert_featureExtractionParams(featXtractParams: featureExtractionPara
 
 
 @app.post("/lookupFeatureExtractionParams")
-async def lookup_featureExtractionParams(imageId: str, magnification: float, tileSizeParam: str):
-    print("This will determine if a set of feature extractions have already been run at this resolution")
+async def lookup_featureExtractionParams(
+    imageId: str, magnification: float, tileSizeParam: str
+):
+    print(
+        "This will determine if a set of feature extractions have already been run at this resolution"
+    )
     with Session(engine) as session:
         exist = (
             session.query(featureExtractionParams)
@@ -192,7 +219,9 @@ async def lookup_featureExtractionParams(imageId: str, magnification: float, til
 
 @app.post("/getFeatureSetId")
 async def get_featureSetId(imageId: str, magnification: float, tileSizeParam: str):
-    print("This will determine if a set of feature extractions have already been run at this resolution")
+    print(
+        "This will determine if a set of feature extractions have already been run at this resolution"
+    )
     with Session(engine) as session:
         exist = (
             session.query(featureExtractionParams)
@@ -212,7 +241,9 @@ async def get_featureSetId(imageId: str, magnification: float, tileSizeParam: st
 async def lookupImage(imageName: str, dsaApiUrl: str):
     with Session(engine) as session:
         print(imageName)
-        imageInfo = session.query(DSAImage).filter(DSAImage.imageName == imageName).first()
+        imageInfo = (
+            session.query(DSAImage).filter(DSAImage.imageName == imageName).first()
+        )
         # return imageInfo
         return imageInfo
 
