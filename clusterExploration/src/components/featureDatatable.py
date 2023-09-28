@@ -23,6 +23,7 @@ my_first_datable = generate_generic_DataTable(df, 'cluster-feature-datatable', c
 
 my_second_row = dbc.Row([dbc.Col(id="left-col-stats",width=3),dbc.Col(id="middle-col-graph",width=6),dbc.Col("Column Right",width=3)])
 
+my_third_row = dbc.Row([dbc.Col(id="left-col", width = 3),dbc.Col(id = "mid-col", width = 6), dbc.Col("Column Right", width=3)])
 
 featureDataTable_layout = html.Div(
     [
@@ -34,7 +35,8 @@ featureDataTable_layout = html.Div(
                id='area-slider',
                marks=None, 
     ),
-    my_second_row
+    my_second_row,
+    my_third_row
     ]
 )
 
@@ -63,3 +65,22 @@ def arjitasFirstGraph( clusterData,maxAreaValue ):
 
     fig = px.histogram(df, x="area")
     return dcc.Graph(figure=fig)
+
+@callback(Output("left-col","children"), 
+            Input("rawFeatureData_store","data")
+            )
+def firstcallback(clusterData):
+    numInDataSet = len(clusterData)
+    return html.H2(f"There are {numInDataSet} objects")
+
+@callback(Output("mid-col","children"),
+        Input("rawFeatureData_store","data"))
+def IntensityHistogram(clusterData):
+    df = pd.DataFrame(clusterData)
+    all_columns = df.columns
+    filtered_columns = [col for col in all_columns if col.startswith('intensity')]
+    data = df[filtered_columns]
+    fig = px.histogram(data, x=data.columns[0], nbins=10, title='Histogram of Intensity ACTININ')
+    fig.update_xaxes(title_text='Intensities')
+    fig.update_yaxes(title_text='Frequency')
+    return dcc.Graph(figure = fig)
