@@ -3,84 +3,110 @@
 
 import dash_bootstrap_components as dbc
 from dash import html, callback, Input, Output, State
-from ..utils.helpers import load_dataset,generate_generic_DataTable
+from ..utils.helpers import load_dataset, generate_generic_DataTable
 from dash import dcc
 import plotly.express as px
 import pandas as pd
 
-
-
 sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
-
 
 ## This is a bad idea.. this should be done as part of a callback function.. but I'll show you that later
 
 df = load_dataset(sampleCSVFile)
 
+my_first_datable = generate_generic_DataTable(
+    df, "cluster-feature-datatable", col_defs={}, exportable=False
+)
 
-my_first_datable = generate_generic_DataTable(df, 'cluster-feature-datatable', col_defs={}, exportable=False)
+
+intensity_cols = [col for col in df.columns if "intensity" in col]
 
 
-my_second_row = dbc.Row([dbc.Col(id="left-col-stats",width=3),dbc.Col(id="middle-col-graph",width=6),dbc.Col("Column Right",width=3)])
-
-my_third_row = dbc.Row([dbc.Col(id="left-col", width = 3),dbc.Col(id = "mid-col", width = 6), dbc.Col("Column Right", width=3)])
-
-featureDataTable_layout = html.Div(
+my_second_row = dbc.Row(
     [
-    dcc.Store(id="rawFeatureData_store",data=df.to_dict('records')),
-    dbc.Row( [my_first_datable]),
-
-     dcc.Slider(0, 50000, 100,
-               value=10000,
-               id='area-slider',
-               marks=None, 
-    ),
-    my_second_row,
-    my_third_row
+        dbc.Col(id="left-col-stats", width=4),
+        dbc.Col(
+            dbc.Row(
+                [
+                    dcc.Slider(
+                        0,
+                        50000,
+                        100,
+                        value=10000,
+                        id="area-slider",
+                        marks=None,
+                    ),
+                    html.Div(id="middle-col-graph"),
+                ]
+            ),
+            width=4,
+        ),
+        dbc.Col(
+            dbc.Row(
+                [
+                    dbc.Select(
+                        id="featureList_selector",
+                        options=intensity_cols,
+                        value=intensity_cols[0],
+                        style={"maxWidth": 300},
+                    ),
+                    html.Div(id="right-col-graph"),
+                ]
+            ),
+            width=4,
+        ),
     ]
 )
 
-@callback( Output("left-col-stats","children"),
-          Input("rawFeatureData_store","data")
-            )
-def arjitasFirstCoolCallback( clusterData ):
-    
+# my_third_row = dbc.Row([dbc.Col(id="left-col", width = 3),dbc.Col(id = "mid-col", width = 6), dbc.Col("Column Right", width=3)])
+
+featureDataTable_layout = html.Div(
+    [
+        dcc.Store(id="rawFeatureData_store", data=df.to_dict("records")),
+        dbc.Row([my_first_datable]),
+        my_second_row,
+    ]
+)
+
+
+@callback(Output("left-col-stats", "children"), Input("rawFeatureData_store", "data"))
+def arjitasFirstCoolCallback(clusterData):
     numCellsInDataSet = len(clusterData)
-    
     return html.H3(f"There are {numCellsInDataSet} objects in the current dataset")
 
 
-
-
-@callback( Output("middle-col-graph","children"),
-          Input("rawFeatureData_store","data"),
-           Input("area-slider","value") )
-def arjitasFirstGraph( clusterData,maxAreaValue ):
-    
+@callback(
+    Output("middle-col-graph", "children"),
+    Input("rawFeatureData_store", "data"),
+    Input("area-slider", "value"),
+)
+def arjitasFirstGraph(clusterData, maxAreaValue):
     ## TO DO... add in some logic that sets the maximum X and or doesn't plot
     ## extreme outliars..
     df = pd.DataFrame(clusterData)
 
-    df = df[df.area<maxAreaValue]
+    df = df[df.area < maxAreaValue]
 
     fig = px.histogram(df, x="area")
     return dcc.Graph(figure=fig)
 
-@callback(Output("left-col","children"), 
-            Input("rawFeatureData_store","data")
-            )
-def firstcallback(clusterData):
-    numInDataSet = len(clusterData)
-    return html.H2(f"There are {numInDataSet} objects")
 
-@callback(Output("mid-col","children"),
-        Input("rawFeatureData_store","data"))
-def IntensityHistogram(clusterData):
+@callback(
+    Output("right-col-graph", "children"),
+    Input("rawFeatureData_store", "data"),
+    Input("featureList_selector", "value"),
+)
+def IntensityHistogram(clusterData, featureName):
     df = pd.DataFrame(clusterData)
-    all_columns = df.columns
-    filtered_columns = [col for col in all_columns if col.startswith('intensity')]
-    data = df[filtered_columns]
-    fig = px.histogram(data, x=data.columns[0], nbins=10, title='Histogram of Intensity ACTININ')
-    fig.update_xaxes(title_text='Intensities')
-    fig.update_yaxes(title_text='Frequency')
-    return dcc.Graph(figure = fig)
+    # all_columns = df.columns
+    # filtered_columns = [col for col in all_columns if col.startswith("intensity")]
+
+    fig = px.histogram(
+        clusterData,
+        x=featureName,
+        nbins=50,
+        title=f"Histogram of Intensity {featureName.replace('intensity','')}",
+    )
+    fig.update_xaxes(title_text="Intensities")
+    fig.update_yaxes(title_text="Frequency")
+    return dcc.Graph(figure=fig)
