@@ -9,7 +9,7 @@ from src.components.banner import banner_layout
 from src.components.featureDatatable import featureDataTable_layout
 import dash_mantine_components as dmc
 from src.components.imageView import imageView_layout
-
+from src.components.featureConfusionMatrix import featureConfusionMatrix_layout
 
 tab_layout = dmc.Tabs(
     [
@@ -22,7 +22,7 @@ tab_layout = dmc.Tabs(
         ),
         dmc.TabsPanel(featureDataTable_layout, value="clusterData"),
         dmc.TabsPanel(imageView_layout, value="imageView"),
-        dmc.TabsPanel("A confusion matrix goes here", value="featureConfusionMatrix"),
+        dmc.TabsPanel(featureConfusionMatrix_layout, value="featureConfusionMatrix"),
     ],
     color="blue",
     orientation="horizontal",
