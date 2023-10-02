@@ -7,15 +7,30 @@ from ..utils.helpers import load_dataset, generate_generic_DataTable
 from dash import dcc
 import plotly.express as px
 import pandas as pd
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.preprocessing import StandardScaler
 
 sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
 
 ## This is a bad idea.. this should be done as part of a callback function.. but I'll show you that later
 
 df = load_dataset(sampleCSVFile)
+data = pd.DataFrame(df)
+all_columns = data.columns
+filtered_columns = [col for col in all_columns if col.startswith('intensity')]
+data = data.iloc[0:2000]
+data = data[filtered_columns]
+scaler = StandardScaler()
+data[filtered_columns] = scaler.fit_transform(data[filtered_columns])
+cluster = AgglomerativeClustering(
+    n_clusters=3, affinity='euclidean', linkage='ward')
+
+cluster.fit(data.values)
+labels = cluster.labels_
+data ['Cluster labels']=labels
 
 my_first_datable = generate_generic_DataTable(
-    df, "cluster-feature-datatable", col_defs={}, exportable=False
+    data, "cluster-feature-datatable", col_defs={}, exportable=False
 )
 
 
