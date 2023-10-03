@@ -2,7 +2,7 @@ from dash import html, Input, Output, State, dcc, callback
 import dash_bootstrap_components as dbc
 from PIL import Image
 import json
-
+import pickle
 
 mcGraph = dcc.Graph(
     id="multiChannel-graph",
@@ -21,6 +21,23 @@ mcGraph = dcc.Graph(
 )
 
 
+mcROIgraph = dcc.Graph(
+    id="multiChannel-ROI-graph",
+    style={
+        "width": "80%",
+        "margin": "0px",
+        "padding": "0px",
+        "display": "inline-block",
+        "vertical-align": "top",
+    },
+    config={
+        "staticPlot": False,
+        "displayModeBar": True,
+        # "modeBarButtonsToAdd": ["drawrect"],
+    },
+)
+
+
 imageView_layout = html.Div(
     [
         dbc.Select(
@@ -28,10 +45,25 @@ imageView_layout = html.Div(
             options=["demo", "anotherdemo"],
             style={"maxWidth": 300},
         ),
+        html.Span(
+            [
+                dbc.Select(
+                    id="viewportSize_select",
+                    options=[256, 512, 768, 1024],
+                    value=768,
+                    style={"maxWidth": 200},
+                ),
+            ],
+            style={"maxWidth": 300},
+        ),
+        dbc.Row([html.Div(id="scalingProperties"), dcc.Store("curImageProps_store")]),
         dbc.Row(
             [
-                dbc.Col(mcGraph, width=8),
-                dbc.Col(id="graph-metadata", width=3),
+                dbc.Col(mcGraph, width=6),
+                dbc.Col(
+                    [html.Div(id="graph-metadata"), html.Div(id="huh")],
+                    width=5,
+                ),
                 dbc.Col(html.Div(id="mouseTracker"), width=1),
             ]
         ),
@@ -39,17 +71,103 @@ imageView_layout = html.Div(
 )
 
 
+### Now let's listen for click events, and for now we will NOT draw an ROI on the image as it
+## is taking a weird amount of time, but we will actually generate the zoomed in image and display that
+
+
+def getImageROI_fromGirder(imageId, startX, startY, roiSize):
+    """Returns a numpy array of an image at base resolution at coordinates
+    startX, startY of width/height=roiSize"""
+    imageUrl = f"item/{imageId}/tiles/region?left={startX}&top={startY}&regionWidth={roiSize}&regionHeight={roiSize}&encoding=pickle"
+
+    try:
+        imageData = gc.get(
+            imageUrl,
+            jsonResp=False,
+        )
+    except:
+        print("Image Data Query failed... DOH")
+
+    imageNP_array = pickle.loads(imageData.content)
+
+    return imageNP_array
+
+
+## TO BE DEBUGGED
+@callback(
+    Output("huh", "children"),
+    Input("multiChannel-graph", "clickData"),
+    Input("curImageProps_store", "data"),
+    Input("viewportSize_select", "value"),
+)
+def renderROI_image(clickData, imageProps, viewportSize):
+    if clickData:
+        x = clickData["points"][0]["x"]
+        y = clickData["points"][0]["y"]
+
+        startX = x * imageProps["scaleFactor"]
+        startY = y * imageProps["scaleFactor"]
+
+        region_np = getImageROI_fromGirder(
+            imageProps["imageId"], startX, startY, viewportSize
+        )
+        image_squeezed = np.squeeze(region_np)
+        fig = px.imshow(image_squeezed)
+        fig = go.Figure(fig)
+
+        points = pd.DataFrame(
+            {
+                "x": [50, 100, 150, 200, 250],
+                "y": [50, 100, 150, 200, 600],
+                "id": ["A", "B", "C", "D", "E"],
+            }
+        )
+
+        # Add the scatter plot
+        fig.add_trace(
+            go.Scatter(
+                x=points["x"],
+                y=points["y"],
+                text=points["id"],
+                mode="markers",
+                marker=dict(size=10, color="red"),
+            )
+        )
+
+        fig_dict = fig.to_dict()
+        return dcc.Graph(
+            figure=fig,
+            style={
+                "width": "80%",
+                "margin": "0px",
+                "padding": "0px",
+                "display": "inline-block",
+                "vertical-align": "top",
+            },
+            config={
+                "staticPlot": False,
+                "displayModeBar": True,
+                # "modeBarButtonsToAdd": ["drawrect"],
+            },
+        )
+
+
+## Let's get a region based on the clicked X y Point...
+
+
 ### This won't do anything yet other than load the only Image I have locally saved...
 @callback(
     Output("mouseTracker", "children"), Input("multiChannel-graph", "relayoutData")
 )
 def trackMousePositionOnMCGraph(relayoutData):
-    print(relayoutData)
+    # print(relayoutData)
     return html.Div(json.dumps(relayoutData))
 
 
 @callback(
-    Output("multiChannel-graph", "figure"), Input("imageToRender_select", "value")
+    Output("multiChannel-graph", "figure"),
+    Output("curImageProps_store", "data"),
+    Input("imageToRender_select", "value"),
 )
 def loadBaseMultiChannelImage(imageName):
     ## This actually only loads a single image, because I don't have more than one local image to use for this..
@@ -57,14 +175,51 @@ def loadBaseMultiChannelImage(imageName):
     width, height = img.size
     fig, tileMetadata = generateMultiVizGraph("demo")
 
-    return fig
+    imageProps = {}
+
+    if imageName == "anotherdemo":
+        imageId = "649b3af5fbfabbf55f16e8b1"
+        tileData = gc.get(f"item/{imageId}/tiles")
+        imageProps = tileData
+        imageProps["imageId"] = imageId
+
+        thumbnailWidth = 512
+
+        imageProps["thumbnailWidth"] = 512
+
+        imageProps["scaleFactor"] = imageProps["sizeX"] / thumbnailWidth
+        # imageProps["yScaleFactor"] = imageProps["sizeY"] / thumbnailWidth
+
+        ## Retrieve the currently selected image as a numpy array... or an image.. to be determined
+        imageThumbnail_data = gc.get(
+            f"item/{imageId}/tiles/thumbnail?width={thumbnailWidth}&encoding=pickle",
+            jsonResp=False,
+        )
+        thumb_np = pickle.loads(imageThumbnail_data.content)
+
+        image_squeezed = np.squeeze(thumb_np)
+
+        fig = px.imshow(image_squeezed)
+        # Convert the figure to a dictionary
+        fig_dict = fig.to_dict()
+
+        return fig_dict, imageProps
+
+    return fig, imageProps
+
+
+## Bind/display the imageProps dictionary .. for now we can keep it ugly
+@callback(Output("scalingProperties", "children"), Input("curImageProps_store", "data"))
+def updateCurImageProps(data):
+    ## We need to format this and make it prettier, for now I am just dumpign the contents..
+    return html.Div(json.dumps(data))
 
 
 def generateMultiVizGraph(imageName):
     imageMetadata = {}
 
     #  html.P(f"ScaleFactor X:{image_info['scaleX']}")
-    print("Received", imageName)
+    # print("Received", imageName)
     if imageName == "demo":
         img = Image.open("sample_image_for_pointdata.png")
         width, height = img.size

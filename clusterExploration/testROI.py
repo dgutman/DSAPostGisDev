@@ -86,6 +86,7 @@ app.layout = html.Div(
             id="baseImage_select", options=["demoOne", "demoTwo"], value="demoOne"
         ),
         dbc.Select(id="roiSize_select", options=[256, 512], value=512),
+        html.Div(id="roiHolder"),
         dcc.Graph(
             id="image-graph",
             figure={"data": initial_figure["data"], "layout": {}},
@@ -124,35 +125,56 @@ app.layout = html.Div(
 )
 
 
-@app.callback(
-    Output("mouse-coordinates", "children"), [Input("image-graph", "hoverData")]
-)
-def display_mouse_coordinates(hoverData):
-    if hoverData and "points" in hoverData and hoverData["points"]:
-        x = hoverData["points"][0]["x"]
-        y = hoverData["points"][0]["y"]
-        return f"Mouse Coordinates: (x: {x}, y: {y})"
-    return "Hover over the image to see coordinates"
+# @app.callback(
+#     Output("mouse-coordinates", "children"), [Input("image-graph", "hoverData")]
+# )
+# def display_mouse_coordinates(hoverData):
+#     if hoverData and "points" in hoverData and hoverData["points"]:
+#         x = hoverData["points"][0]["x"]
+#         y = hoverData["points"][0]["y"]
+#         return f"Mouse Coordinates: (x: {x}, y: {y})"
+#     return "Hover over the image to see coordinates"
 
 
-@app.callback(Output("roiImage_graph", "figure"), Input("image-graph", "clickData"))
+@app.callback(Output("roiHolder", "children"), Input("image-graph", "clickData"))
 def updateROIGraph(clickData):
     if clickData:
+        scaleFactor = 25
         # print(clickData, "was received...")
-        x = clickData["points"][0]["x"]
-        y = clickData["points"][0]["y"]
+        x = clickData["points"][0]["x"] * scaleFactor
+        y = clickData["points"][0]["y"] * scaleFactor
 
-        roiImage_np = getImageROI_fromGirder(sampleImageId, x, y, 256)
+        roiImage_np = getImageROI_fromGirder(sampleImageId, x, y, 512)
 
-        # Assuming 'image' is your (256, 256, 1) shaped image
+        # Example numpy array
+        ## MAKE THE ROI INT OA NON GRAY SCALE IMAGE
+
         image_squeezed = np.squeeze(roiImage_np)
-        ### Now generate an ROI graph based on the image I just returned.. woo hoo
-        fig = go.Figure()
-        print(image_squeezed.shape)
-        fig.add_trace(go.Image(z=image_squeezed))
 
-        print("Trying to update the roi graph...")
-        return fig
+        fig = px.imshow(image_squeezed)
+
+        # Convert the figure to a dictionary
+        fig_dict = fig.to_dict()
+
+        # Initialize the Dash app
+
+        return dcc.Graph(figure=fig_dict)
+
+        # rgb_image = np.stack([image_squeezed, image_squeezed, image_squeezed], axis=-1)
+
+        # fig = go.Figure(go.Image(z=rgb_image))
+        # return dcc.Graph(figure=fig)
+
+        # # Assuming 'image' is your (256, 256, 1) shaped image
+
+        # ### Now generate an ROI graph based on the image I just returned.. woo hoo
+        # fig = go.Figure()
+        # print(image_squeezed.shape)
+
+        # fig.add_trace(go.Image(z=image_squeezed))
+
+        # print("Trying to update the roi graph...")
+        # return fig
 
 
 # @app.callback(
