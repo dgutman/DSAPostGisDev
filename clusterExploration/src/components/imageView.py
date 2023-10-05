@@ -2,10 +2,23 @@ from dash import html, Input, Output, State, dcc, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 from PIL import Image
-import json
-import pickle
-from ..utils.helpers import load_dataset
-import plotly.subplots as sp
+import json, pickle
+from ..utils.helpers import load_dataset, generate_generic_DataTable
+
+# import plotly.subplots as sp
+import numpy as np
+import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import girder_client
+
+
+### Helper functions to pull and visualize multichannel images from the DSA
+
+imgId = "649b7993fbfabbf55f16fba4"
+DSA_BaseURL = "https://candygram.neurology.emory.edu/api/v1"
+
+gc = girder_client.GirderClient(apiUrl=DSA_BaseURL)
 
 mcGraph = dcc.Graph(
     id="multiChannel-graph",
@@ -23,11 +36,10 @@ mcGraph = dcc.Graph(
     },
 )
 
-
 mcROIgraph = dcc.Graph(
     id="multiChannel-ROI-graph",
     style={
-        "width": "80%",
+        "width": "100%",
         "margin": "0px",
         "padding": "0px",
         "display": "inline-block",
@@ -40,13 +52,13 @@ mcROIgraph = dcc.Graph(
     },
 )
 
-
 imageView_layout = html.Div(
     [
         dbc.Select(
             id="imageToRender_select",
-            options=["demo", "anotherdemo"],
+            options=["anotherdemo"],
             style={"maxWidth": 300},
+            value="anotherdemo",
         ),
         html.Span(
             [
@@ -59,17 +71,22 @@ imageView_layout = html.Div(
             ],
             style={"maxWidth": 300},
         ),
-        dbc.Row([html.Div(id="scalingProperties"), dcc.Store("curImageProps_store")]),
         dbc.Row(
             [
-                dbc.Col(mcGraph, width=6),
-                dbc.Col(
-                    [html.Div(id="graph-metadata"), html.Div(id="huh")],
-                    width=5,
-                ),
                 dbc.Col(html.Div(id="mouseTracker"), width=1),
             ]
+        ),  ### Mouse tracker should be on its own line..
+        dbc.Row(
+            [
+                dbc.Col(mcGraph, width=4),
+                dbc.Col(
+                    [html.Div(id="graph-metadata"), html.Div(id="huh")],
+                    width=8,
+                ),
+            ]
         ),
+        dbc.Row([html.Div(id="displayedPoints_table")]),
+        dbc.Row([html.Div(id="scalingProperties"), dcc.Store("curImageProps_store")]),
     ]
 )
 
@@ -102,6 +119,7 @@ def getImageROI_fromGirder(imageId, startX, startY, roiSize):
 ## TO BE DEBUGGED
 @callback(
     Output("huh", "children"),
+    Output("displayedPoints_table", "children"),
     Input("multiChannel-graph", "clickData"),
     Input("curImageProps_store", "data"),
     Input("viewportSize_select", "value"),
@@ -120,49 +138,42 @@ def renderROI_image(clickData, imageProps, viewportSize):
         fig = px.imshow(image_squeezed)
         fig = go.Figure(fig)
 
-        min_centroid_x = 250 * imageProps["scaleFactor"]
-        max_centroid_x = 450 * imageProps["scaleFactor"]
-        min_centroid_y = 3000 * imageProps["scaleFactor"]
-        max_centroid_y = 5000 * imageProps["scaleFactor"]
-        data_df['x_centroid'] = (data_df['centroid-0'] * imageProps["scaleFactor"]).astype(int)
-        data_df['y_centroid'] = (data_df['centroid-1'] * imageProps["scaleFactor"]).astype(int)
+        data_df["x_centroid"] = data_df["centroid-0"].astype(int)
+        data_df["y_centroid"] = data_df["centroid-1"].astype(int)
+
         filtered_data = data_df[
-            ((data_df['x_centroid'] >= min_centroid_x) & (data_df['x_centroid'] <= max_centroid_x)) &
-            ((data_df['y_centroid'] >= min_centroid_y) & (data_df['y_centroid'] <= max_centroid_y))
+            (
+                (data_df["x_centroid"] >= startX)
+                & (data_df["x_centroid"] <= (startX + viewportSize))
+            )
+            & (
+                (data_df["y_centroid"] >= startY)
+                & (data_df["y_centroid"] <= (startY + viewportSize))
+            )
         ]
 
         print(data_df.head())
 
-        x_values = filtered_data['x_centroid'].tolist()
-        y_values = filtered_data['y_centroid'].tolist()
+        x_values = filtered_data["x_centroid"].tolist()
+        y_values = filtered_data["y_centroid"].tolist()
 
-        x_values_rescaled = [(x - startX) / imageProps["scaleFactor"] for x in x_values]
-        y_values_rescaled = [(y - startY) / imageProps["scaleFactor"] for y in y_values]
+        x_values_rescaled = [(x - startX) for x in x_values]
+        y_values_rescaled = [(y - startY) for y in y_values]
 
-        ids = [chr(ord('A') + i) for i in range(len(x_values))]
+        ids = [chr(ord("A") + i) for i in range(len(x_values))]
 
-        points = pd.DataFrame({
-            "x": x_values_rescaled,
-            "y": y_values_rescaled,
-            "id": ids
-        })
+        points = pd.DataFrame(
+            {"x": x_values_rescaled, "y": y_values_rescaled, "id": ids}
+        )
 
-        # points = pd.DataFrame(
-        #     {
-        #         "x": [50, 100, 150, 200, 250],
-        #         "y": [50, 100, 150, 200, 600],
-        #         "id": ["A", "B", "C", "D", "E"],
-        #     }
-        # )
-
-        #Add the scatter plot
+        # Add the scatter plot
         fig.add_trace(
             go.Scatter(
                 x=points["x"],
                 y=points["y"],
                 text=points["id"],
                 mode="markers",
-                marker=dict(size=10, color="red"),
+                marker=dict(size=2, color="red"),
             )
         )
 
@@ -181,19 +192,18 @@ def renderROI_image(clickData, imageProps, viewportSize):
                 "displayModeBar": True,
                 # "modeBarButtonsToAdd": ["drawrect"],
             },
-        )
+        ), generate_generic_DataTable(filtered_data, "filtered_points")
+    else:
+        return None, None
 
 
-## Let's get a region based on the clicked X y Point...
-
-
-### This won't do anything yet other than load the only Image I have locally saved...
-@callback(
-    Output("mouseTracker", "children"), Input("multiChannel-graph", "relayoutData")
-)
-def trackMousePositionOnMCGraph(relayoutData):
-    # print(relayoutData)
-    return html.Div(json.dumps(relayoutData))
+# ### This won't do anything yet other than load the only Image I have locally saved...
+# @callback(
+#     Output("mouseTracker", "children"), Input("multiChannel-graph", "relayoutData")
+# )
+# def trackMousePositionOnMCGraph(relayoutData):
+#     # print(relayoutData)
+#     return html.Div(json.dumps(relayoutData))
 
 
 @callback(
@@ -203,14 +213,16 @@ def trackMousePositionOnMCGraph(relayoutData):
 )
 def loadBaseMultiChannelImage(imageName):
     ## This actually only loads a single image, because I don't have more than one local image to use for this..
-    img = Image.open("sample_image_for_pointdata.png")
-    width, height = img.size
-    fig, tileMetadata = generateMultiVizGraph("demo")
+    # img = Image.open("sample_image_for_pointdata.png")
+    # width, height = img.size
+    # fig, tileMetadata = generateMultiVizGraph("demo")
 
     imageProps = {}
 
+    # 649b3af5fbfabbf55f16e8b1 Single channel image
+
     if imageName == "anotherdemo":
-        imageId = "649b3af5fbfabbf55f16e8b1"
+        imageId = "649b78f3fbfabbf55f16fb0f"
         tileData = gc.get(f"item/{imageId}/tiles")
         imageProps = tileData
         imageProps["imageId"] = imageId
@@ -269,7 +281,9 @@ def generateMultiVizGraph(imageName):
         )
         fig.add_trace(go.Image(z=img_array), 1, 1)
         # fig = px.imshow(img_array)
-        fig.update_layout(width=800, height=600, margin=dict(t=2, r=2, b=2, l=2))
+        fig.update_layout(
+            margin=dict(t=2, r=2, b=2, l=2)
+        )  ## removed width=800, height=600,
 
         # Display image
 
@@ -285,6 +299,31 @@ def generateMultiVizGraph(imageName):
         return fig, tileMetadata
 
     return None, None
+
+
+# encoded_style_value = "%7B%22bands%22:%20%5B%7B%22frame%22:%200,%20%22palette%22:%20%5B%22#000000%22,%20%22#0000ff%22%5D,%20%22min%22:%20%22auto%22,%20%22max%22:%20%22auto%22%7D,%20%7B%22frame%22:%201,%20%22palette%22:%20%5B%22#000000%22,%20%22#00ff00%22%5D,%20%22max%22:%20%22auto%22%7D,%20%7B%22frame%22:%202,%20%22palette%22:%20%5B%22#000000%22,%20%22#ff0000%22%5D,%20%22max%22:%20%22auto%22%7D%5D%7D"
+
+# # Decode the style parameter value
+# decoded_style_value = urllib.parse.unquote(encoded_style_value)
+
+
+def generateImageMetadataPanel(imageMetadata):
+    ### Given a dictionary, should generate a formatted panel with the relevant info
+    if imageMetadata:
+        info_content = html.Div(
+            [
+                html.H5("Image Information"),
+                # html.P(f"Levels: {image_info['levels']}"),
+                html.P(f"Size X: {imageMetadata.get('sizeX',{})}"),
+                html.P(f"Size Y: {imageMetadata.get('sizeY',{})}"),
+                # html.P(f"Tile Height: {image_info['tileHeight']}"),
+                # html.P(f"Tile Width: {image_info['tileWidth']}"),
+                html.P(f"ScaleFactor X:{imageMetadata['scaleX']:.4f}"),
+                html.P(f"ScaleFactor Y:{imageMetadata['scaleY']:.4f}"),
+            ],
+            style={"margin": "10px"},
+        )
+        return info_content
 
 
 # # Convert the image to a numpy array
@@ -516,105 +555,11 @@ def generateMultiVizGraph(imageName):
 #         return dash.no_update, dash.no_update
 
 
-### Helper functions to pull and visualize multichannel images from the DSA
-from PIL import Image
-import numpy as np
-import pandas as pd
-import urllib
-from dash import html
-import plotly.express as px
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import girder_client
-
-
-imgId = "649b7993fbfabbf55f16fba4"
-DSA_BaseURL = "https://candygram.neurology.emory.edu/api/v1"
-
-gc = girder_client.GirderClient(apiUrl=DSA_BaseURL)
-
-# encoded_style_value = "%7B%22bands%22:%20%5B%7B%22frame%22:%200,%20%22palette%22:%20%5B%22#000000%22,%20%22#0000ff%22%5D,%20%22min%22:%20%22auto%22,%20%22max%22:%20%22auto%22%7D,%20%7B%22frame%22:%201,%20%22palette%22:%20%5B%22#000000%22,%20%22#00ff00%22%5D,%20%22max%22:%20%22auto%22%7D,%20%7B%22frame%22:%202,%20%22palette%22:%20%5B%22#000000%22,%20%22#ff0000%22%5D,%20%22max%22:%20%22auto%22%7D%5D%7D"
-
-# # Decode the style parameter value
-# decoded_style_value = urllib.parse.unquote(encoded_style_value)
-
-
-points = pd.DataFrame(
-    {
-        "x": [50, 100, 150, 200, 250],
-        "y": [50, 100, 150, 200, 600],
-        "id": ["A", "B", "C", "D", "E"],
-    }
-)
-
-
-# image_info = {
-#     "frames": [
-#         {"Frame": 0, "Index": 0},
-#         {"Frame": 1, "Index": 1},
-#         {"Frame": 2, "Index": 2},
-#         {"Frame": 3, "Index": 3},
-#         {"Frame": 4, "Index": 4},
-#         {"Frame": 5, "Index": 5},
-#         {"Frame": 6, "Index": 6},
-#         {"Frame": 7, "Index": 7},
-#         {"Frame": 8, "Index": 8},
-#         {"Frame": 9, "Index": 9},
-#         {"Frame": 10, "Index": 10},
-#         {"Frame": 11, "Index": 11},
-#         {"Frame": 12, "Index": 12},
-#         {"Frame": 13, "Index": 13},
-#         {"Frame": 14, "Index": 14},
-#         {"Frame": 15, "Index": 15},
-#         {"Frame": 16, "Index": 16},
-#         {"Frame": 17, "Index": 17},
-#         {"Frame": 18, "Index": 18},
-#         {"Frame": 19, "Index": 19},
-#         {"Frame": 20, "Index": 20},
-#         {"Frame": 21, "Index": 21},
-#         {"Frame": 22, "Index": 22},
-#         {"Frame": 23, "Index": 23},
-#         {"Frame": 24, "Index": 24},
-#         {"Frame": 25, "Index": 25},
-#         {"Frame": 26, "Index": 26},
-#         {"Frame": 27, "Index": 27},
-#     ],
-#     "levels": 8,
-#     "magnification": None,
-#     "mm_x": None,
-#     "mm_y": None,
-#     "sizeX": 25878,
-#     "sizeY": 22220,
-#     "tileHeight": 256,
-#     "tileWidth": 256,
-#     "scaleX": 1.0,
-#     "scaleY": 1.0,
-# }
-
-
-def generateImageMetadataPanel(imageMetadata):
-    ### Given a dictionary, should generate a formatted panel with the relevant info
-    if imageMetadata:
-        info_content = html.Div(
-            [
-                html.H5("Image Information"),
-                # html.P(f"Levels: {image_info['levels']}"),
-                html.P(f"Size X: {imageMetadata.get('sizeX',{})}"),
-                html.P(f"Size Y: {imageMetadata.get('sizeY',{})}"),
-                # html.P(f"Tile Height: {image_info['tileHeight']}"),
-                # html.P(f"Tile Width: {image_info['tileWidth']}"),
-                html.P(f"ScaleFactor X:{imageMetadata['scaleX']:.4f}"),
-                html.P(f"ScaleFactor Y:{imageMetadata['scaleY']:.4f}"),
-            ],
-            style={"margin": "10px"},
-        )
-        return info_content
-
-    # html.Hr(),
-    # html.H6("Frames:"),
-    # # html.Ul(
-    # #     [
-    # #         html.Li(f"Frame: {frame['Frame']}, Index: {frame['Index']}")
-    # #         for frame in image_info["frames"]
-    # #     ]
-    # # ),
+# html.Hr(),
+# html.H6("Frames:"),
+# # html.Ul(
+# #     [
+# #         html.Li(f"Frame: {frame['Frame']}, Index: {frame['Index']}")
+# #         for frame in image_info["frames"]
+# #     ]
+# # ),
