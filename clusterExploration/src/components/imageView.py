@@ -1,8 +1,11 @@
 from dash import html, Input, Output, State, dcc, callback
 import dash_bootstrap_components as dbc
+import pandas as pd
 from PIL import Image
 import json
 import pickle
+from ..utils.helpers import load_dataset
+import plotly.subplots as sp
 
 mcGraph = dcc.Graph(
     id="multiChannel-graph",
@@ -70,6 +73,9 @@ imageView_layout = html.Div(
     ]
 )
 
+sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
+data_df = load_dataset(sampleCSVFile)
+data = pd.DataFrame(data_df)
 
 ### Now let's listen for click events, and for now we will NOT draw an ROI on the image as it
 ## is taking a weird amount of time, but we will actually generate the zoomed in image and display that
@@ -107,7 +113,6 @@ def renderROI_image(clickData, imageProps, viewportSize):
 
         startX = x * imageProps["scaleFactor"]
         startY = y * imageProps["scaleFactor"]
-
         region_np = getImageROI_fromGirder(
             imageProps["imageId"], startX, startY, viewportSize
         )
@@ -115,15 +120,42 @@ def renderROI_image(clickData, imageProps, viewportSize):
         fig = px.imshow(image_squeezed)
         fig = go.Figure(fig)
 
-        points = pd.DataFrame(
-            {
-                "x": [50, 100, 150, 200, 250],
-                "y": [50, 100, 150, 200, 600],
-                "id": ["A", "B", "C", "D", "E"],
-            }
-        )
+        min_centroid_x = 250 * imageProps["scaleFactor"]
+        max_centroid_x = 450 * imageProps["scaleFactor"]
+        min_centroid_y = 3000 * imageProps["scaleFactor"]
+        max_centroid_y = 5000 * imageProps["scaleFactor"]
+        data_df['x_centroid'] = (data_df['centroid-0'] * imageProps["scaleFactor"]).astype(int)
+        data_df['y_centroid'] = (data_df['centroid-1'] * imageProps["scaleFactor"]).astype(int)
+        filtered_data = data_df[
+            ((data_df['x_centroid'] >= min_centroid_x) & (data_df['x_centroid'] <= max_centroid_x)) &
+            ((data_df['y_centroid'] >= min_centroid_y) & (data_df['y_centroid'] <= max_centroid_y))
+        ]
 
-        # Add the scatter plot
+        print(data_df.head())
+
+        x_values = filtered_data['x_centroid'].tolist()
+        y_values = filtered_data['y_centroid'].tolist()
+
+        x_values_rescaled = [(x - startX) / imageProps["scaleFactor"] for x in x_values]
+        y_values_rescaled = [(y - startY) / imageProps["scaleFactor"] for y in y_values]
+
+        ids = [chr(ord('A') + i) for i in range(len(x_values))]
+
+        points = pd.DataFrame({
+            "x": x_values_rescaled,
+            "y": y_values_rescaled,
+            "id": ids
+        })
+
+        # points = pd.DataFrame(
+        #     {
+        #         "x": [50, 100, 150, 200, 250],
+        #         "y": [50, 100, 150, 200, 600],
+        #         "id": ["A", "B", "C", "D", "E"],
+        #     }
+        # )
+
+        #Add the scatter plot
         fig.add_trace(
             go.Scatter(
                 x=points["x"],
