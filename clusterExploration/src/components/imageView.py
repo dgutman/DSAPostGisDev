@@ -4,6 +4,7 @@ import pandas as pd
 from PIL import Image
 import json, pickle
 from ..utils.helpers import load_dataset, generate_generic_DataTable
+from diskcache import Cache
 
 # import plotly.subplots as sp
 import numpy as np
@@ -11,6 +12,15 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import girder_client
+
+from functools import lru_cache
+
+## Adding locla cache here
+# from flask_caching import Cache
+
+from diskcache import FanoutCache
+
+cache = FanoutCache(shards=4, timeout=2)
 
 
 ### Helper functions to pull and visualize multichannel images from the DSA
@@ -23,7 +33,7 @@ gc = girder_client.GirderClient(apiUrl=DSA_BaseURL)
 mcGraph = dcc.Graph(
     id="multiChannel-graph",
     style={
-        "width": "80%",
+        "width": "100%",
         "margin": "0px",
         "padding": "0px",
         "display": "inline-block",
@@ -31,7 +41,7 @@ mcGraph = dcc.Graph(
     },
     config={
         "staticPlot": False,
-        "displayModeBar": True,
+        "displayModeBar": False,
         "modeBarButtonsToAdd": ["drawrect"],
     },
 )
@@ -47,40 +57,51 @@ mcROIgraph = dcc.Graph(
     },
     config={
         "staticPlot": False,
-        "displayModeBar": True,
+        "displayModeBar": False,
         # "modeBarButtonsToAdd": ["drawrect"],
     },
 )
 
 imageView_layout = html.Div(
     [
-        dbc.Select(
-            id="imageToRender_select",
-            options=["anotherdemo"],
-            style={"maxWidth": 300},
-            value="anotherdemo",
-        ),
-        html.Span(
+        dbc.Row(
             [
+                dbc.Select(
+                    id="imageToRender_select",
+                    options=["anotherdemo"],
+                    style={"maxWidth": 300},
+                    value="anotherdemo",
+                ),
                 dbc.Select(
                     id="viewportSize_select",
                     options=[256, 512, 768, 1024],
                     value=768,
-                    style={"maxWidth": 200},
+                    style={"display": "inline-block", "maxWidth": 200},
+                    className="me-1",
+                ),
+                dbc.Container(
+                    [
+                        dcc.Slider(
+                            0,
+                            10,
+                            1,
+                            value=0,
+                            id="frame_select",
+                            className="me-1",
+                        )
+                    ],
+                    style={"display": "inline-block", "maxWidth": 300},
                 ),
             ],
-            style={"maxWidth": 300},
         ),
         dbc.Row(
-            [
-                dbc.Col(html.Div(id="mouseTracker"), width=1),
-            ]
+            dbc.Col(html.Div(id="mouseTracker"), width=6),
         ),  ### Mouse tracker should be on its own line..
         dbc.Row(
             [
                 dbc.Col(mcGraph, width=4),
                 dbc.Col(
-                    [html.Div(id="graph-metadata"), html.Div(id="huh")],
+                    [html.Div(id="graph-metadata"), html.Div(id="roiDispArea")],
                     width=8,
                 ),
             ]
@@ -90,6 +111,7 @@ imageView_layout = html.Div(
     ]
 )
 
+
 sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
 data_df = load_dataset(sampleCSVFile)
 data = pd.DataFrame(data_df)
@@ -98,6 +120,7 @@ data = pd.DataFrame(data_df)
 ## is taking a weird amount of time, but we will actually generate the zoomed in image and display that
 
 
+@cache.memoize()
 def getImageROI_fromGirder(imageId, startX, startY, roiSize):
     """Returns a numpy array of an image at base resolution at coordinates
     startX, startY of width/height=roiSize"""
@@ -118,7 +141,7 @@ def getImageROI_fromGirder(imageId, startX, startY, roiSize):
 
 ## TO BE DEBUGGED
 @callback(
-    Output("huh", "children"),
+    Output("roiDispArea", "children"),
     Output("displayedPoints_table", "children"),
     Input("multiChannel-graph", "clickData"),
     Input("curImageProps_store", "data"),
@@ -129,8 +152,8 @@ def renderROI_image(clickData, imageProps, viewportSize):
         x = clickData["points"][0]["x"]
         y = clickData["points"][0]["y"]
 
-        startX = x * imageProps["scaleFactor"]
-        startY = y * imageProps["scaleFactor"]
+        startX = x * float(imageProps["scaleFactor"])
+        startY = y * float(imageProps["scaleFactor"])
         region_np = getImageROI_fromGirder(
             imageProps["imageId"], startX, startY, viewportSize
         )
@@ -173,7 +196,7 @@ def renderROI_image(clickData, imageProps, viewportSize):
                 y=points["y"],
                 text=points["id"],
                 mode="markers",
-                marker=dict(size=2, color="red"),
+                marker=dict(size=3, color="yellow"),
             )
         )
 
@@ -181,7 +204,7 @@ def renderROI_image(clickData, imageProps, viewportSize):
         return dcc.Graph(
             figure=fig,
             style={
-                "width": "80%",
+                "width": "100%",
                 "margin": "0px",
                 "padding": "0px",
                 "display": "inline-block",
@@ -189,7 +212,7 @@ def renderROI_image(clickData, imageProps, viewportSize):
             },
             config={
                 "staticPlot": False,
-                "displayModeBar": True,
+                "displayModeBar": False,
                 # "modeBarButtonsToAdd": ["drawrect"],
             },
         ), generate_generic_DataTable(filtered_data, "filtered_points")
@@ -198,20 +221,34 @@ def renderROI_image(clickData, imageProps, viewportSize):
 
 
 # ### This won't do anything yet other than load the only Image I have locally saved...
-# @callback(
-#     Output("mouseTracker", "children"), Input("multiChannel-graph", "relayoutData")
-# )
-# def trackMousePositionOnMCGraph(relayoutData):
-#     # print(relayoutData)
-#     return html.Div(json.dumps(relayoutData))
+@callback(
+    Output("mouseTracker", "children"),
+    Input("multiChannel-graph", "hoverData"),
+    Input("curImageProps_store", "data"),
+)
+def trackMousePositionOnMCGraph(hoverData, imageProps):
+    # print(relayoutData)
+
+    if hoverData:
+        scaleFactor = imageProps["scaleFactor"]
+
+        x = hoverData["points"][0]["x"]  # * scaleFactor
+        y = hoverData["points"][0]["y"]  # * scaleFactor
+
+        # roiImage_np = getImageROI_fromGirder(sampleImageId, x, y, 512)
+        return html.Div(
+            f"localX: {x} localY: {y} globalX: {x*scaleFactor:.4f} globalY: {y*scaleFactor:.4f}"
+        )
 
 
 @callback(
     Output("multiChannel-graph", "figure"),
     Output("curImageProps_store", "data"),
     Input("imageToRender_select", "value"),
+    Input("frame_select", "value"),
 )
-def loadBaseMultiChannelImage(imageName):
+@cache.memoize()
+def loadBaseMultiChannelImage(imageName, frameNum):
     ## This actually only loads a single image, because I don't have more than one local image to use for this..
     # img = Image.open("sample_image_for_pointdata.png")
     # width, height = img.size
@@ -253,52 +290,10 @@ def loadBaseMultiChannelImage(imageName):
 
 
 ## Bind/display the imageProps dictionary .. for now we can keep it ugly
-@callback(Output("scalingProperties", "children"), Input("curImageProps_store", "data"))
-def updateCurImageProps(data):
-    ## We need to format this and make it prettier, for now I am just dumpign the contents..
-    return html.Div(json.dumps(data))
-
-
-def generateMultiVizGraph(imageName):
-    imageMetadata = {}
-
-    #  html.P(f"ScaleFactor X:{image_info['scaleX']}")
-    # print("Received", imageName)
-    if imageName == "demo":
-        img = Image.open("sample_image_for_pointdata.png")
-        width, height = img.size
-        ## TO DO IS CHANGE THIS IMAGE
-
-        tileMetadata = gc.get(f"item/{imgId}/tiles")
-
-        tileMetadata["scaleX"] = tileMetadata["sizeX"] / width
-        tileMetadata["scaleY"] = tileMetadata["sizeY"] / height
-
-        img_array = np.array(img)
-
-        fig = make_subplots(
-            rows=1, cols=1, subplot_titles=("Image with Cluster Points",)
-        )
-        fig.add_trace(go.Image(z=img_array), 1, 1)
-        # fig = px.imshow(img_array)
-        fig.update_layout(
-            margin=dict(t=2, r=2, b=2, l=2)
-        )  ## removed width=800, height=600,
-
-        # Display image
-
-        fig.update_layout(
-            margin=dict(t=6, b=5, l=2, r=2),  # Adjust these values as needed
-            dragmode="drawrect",
-            shapes=[],
-            # dragmode="select",
-        )
-        fig.update_xaxes(range=[0, width])
-        fig.update_yaxes(range=[0, height], scaleanchor="x")
-
-        return fig, tileMetadata
-
-    return None, None
+# @callback(Output("scalingProperties", "children"), Input("curImageProps_store", "data"))
+# def updateCurImageProps(data):
+#     ## We need to format this and make it prettier, for now I am just dumpign the contents..
+#     return html.Div(json.dumps(data))
 
 
 # encoded_style_value = "%7B%22bands%22:%20%5B%7B%22frame%22:%200,%20%22palette%22:%20%5B%22#000000%22,%20%22#0000ff%22%5D,%20%22min%22:%20%22auto%22,%20%22max%22:%20%22auto%22%7D,%20%7B%22frame%22:%201,%20%22palette%22:%20%5B%22#000000%22,%20%22#00ff00%22%5D,%20%22max%22:%20%22auto%22%7D,%20%7B%22frame%22:%202,%20%22palette%22:%20%5B%22#000000%22,%20%22#ff0000%22%5D,%20%22max%22:%20%22auto%22%7D%5D%7D"
@@ -384,6 +379,46 @@ def generateImageMetadataPanel(imageMetadata):
 # )
 
 
+# def generateMultiVizGraph(imageName):
+#     imageMetadata = {}
+
+#     #  html.P(f"ScaleFactor X:{image_info['scaleX']}")
+#     # print("Received", imageName)
+#     if imageName == "demo":
+#         img = Image.open("sample_image_for_pointdata.png")
+#         width, height = img.size
+#         ## TO DO IS CHANGE THIS IMAGE
+
+#         tileMetadata = gc.get(f"item/{imgId}/tiles")
+
+#         tileMetadata["scaleX"] = tileMetadata["sizeX"] / width
+#         tileMetadata["scaleY"] = tileMetadata["sizeY"] / height
+
+#         img_array = np.array(img)
+
+#         fig = make_subplots(
+#             rows=1, cols=1, subplot_titles=("Image with Cluster Points",)
+#         )
+#         fig.add_trace(go.Image(z=img_array), 1, 1)
+#         # fig = px.imshow(img_array)
+#         fig.update_layout(
+#             margin=dict(t=2, r=2, b=2, l=2)
+#         )  ## removed width=800, height=600,
+
+#         # Display image
+
+#         fig.update_layout(
+#             margin=dict(t=6, b=5, l=2, r=2),  # Adjust these values as needed
+#             dragmode="drawrect",
+#             shapes=[],
+#             # dragmode="select",
+#         )
+#         fig.update_xaxes(range=[0, width])
+#         fig.update_yaxes(range=[0, height], scaleanchor="x")
+
+#         return fig, tileMetadata
+
+#     return None, None
 # mcHoverDataGraph = dcc.Graph(
 #     id="activeObject-chart",
 #     style={
