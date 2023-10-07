@@ -2,10 +2,11 @@ from dash import html, Input, Output, State, dcc, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 from PIL import Image
-import json, pickle
+import json, pickle, dash, time
 from ..utils.helpers import load_dataset, generate_generic_DataTable
-from diskcache import Cache
 
+# from diskcache import Cache
+# import time
 # import plotly.subplots as sp
 import numpy as np
 import plotly.express as px
@@ -13,15 +14,34 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import girder_client
 
-from functools import lru_cache
-
 ## Adding locla cache here
-# from flask_caching import Cache
-
 from diskcache import FanoutCache
 
-cache = FanoutCache(shards=4, timeout=2)
+## Create cacheing here, may want to add a button to clear cache at some point
+## Currently I just delete it from the disk
+cache_directory = ".localDashDiskCache"
+cache = FanoutCache(directory=cache_directory, shards=4)
 
+sampleCSVFile = "PosStats_MAP01938_0000_0E_01_region_001.csv"
+
+
+# # sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
+# @cache.memoize()
+# def loadSegmentResults(csvFileName):
+#     data_df = pd.read_csv(csvFileName)
+#     ## May do some of the type casting here as well...
+#     print(data_df.head())
+#     return data_df
+
+
+# st = time.time()
+# et = time.time()
+
+# # get the execution time
+# elapsed_time = et - st
+# print("Execution time:", elapsed_time, "seconds")
+
+# data_df = loadSegmentResults(sampleCSVFile)
 
 ### Helper functions to pull and visualize multichannel images from the DSA
 
@@ -62,10 +82,18 @@ mcROIgraph = dcc.Graph(
     },
 )
 
+
 imageView_layout = html.Div(
     [
         dbc.Row(
             [
+                dbc.Select(
+                    id="imageFeatureSet_select",
+                    options=["MedStats", "PosStats"],
+                    style={"maxWidth": 300},
+                    value="MedStats",
+                    className="me-1",
+                ),
                 dbc.Select(
                     id="imageToRender_select",
                     options=["anotherdemo"],
@@ -75,27 +103,28 @@ imageView_layout = html.Div(
                 dbc.Select(
                     id="viewportSize_select",
                     options=[256, 512, 768, 1024],
-                    value=768,
+                    value=256,
                     style={"display": "inline-block", "maxWidth": 200},
                     className="me-1",
                 ),
                 dbc.Container(
                     [
-                        dcc.Slider(
-                            0,
-                            10,
-                            1,
-                            value=0,
+                        dbc.Select(
+                            options=[],
                             id="frame_select",
+                            value=0,
                             className="me-1",
-                        )
+                        ),
                     ],
                     style={"display": "inline-block", "maxWidth": 300},
                 ),
             ],
         ),
         dbc.Row(
-            dbc.Col(html.Div(id="mouseTracker"), width=6),
+            [
+                dbc.Col(html.Div(id="mouseTracker"), width=6),
+                dbc.Col(html.Div(id="curROI_disp"), width=6),
+            ]
         ),  ### Mouse tracker should be on its own line..
         dbc.Row(
             [
@@ -106,21 +135,64 @@ imageView_layout = html.Div(
                 ),
             ]
         ),
-        dbc.Row([html.Div(id="displayedPoints_table")]),
-        dbc.Row([html.Div(id="scalingProperties"), dcc.Store("curImageProps_store")]),
+        dbc.Row(
+            dbc.Collapse(
+                [html.Div(id="displayedPoints_table")],
+                is_open=False,
+            ),
+        ),
+        dbc.Row(
+            [
+                html.Div(id="scalingProperties"),
+                dcc.Store("curImageProps_store"),
+                dcc.Store("curROI_store", data={}),
+                dcc.Store("clusterData_store", data=[]),  ## Load the initial file
+            ]
+        ),
     ]
 )
 
 
-sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
-data_df = load_dataset(sampleCSVFile)
-data = pd.DataFrame(data_df)
+### FYI... THIS IS THE PART THAT TAKES LONG... PUSHING ALL THE DATA TO THE LOCAL DATASTORE
+## I can probably refactor this significantly...
+@callback(Output("clusterData_store", "data"), Input("imageFeatureSet_select", "value"))
+@cache.memoize()
+def updateClusterDataStore(statsType):
+    statsFileName = f"{statsType}_MAP01938_0000_0E_01_region_001.csv"
+
+    data = pd.read_csv(statsFileName)
+    try:
+        data.Cell_Centroid_X = data.Cell_Centroid_X.astype(int)
+        data.Cell_Centroid_Y = data.Cell_Centroid_Y.astype(int)
+    except:
+        print("Input file is missing centroid params..")
+
+    # print(data.head())
+    ## So the delay is happening here... loading all those points for whatever reason takes an oddly long time
+    return data.to_dict()
+
+
+### Bind the clusterData_store and generate a data table that we can browse.
+
+
+### This will generate a table of the points being displayed
+@callback(
+    Output("displayedPoints_table", "children"), Input("clusterData_store", "data")
+)
+# @cache.memoize()
+def generateClusterDataTable(cluster_data):
+    ## irritatingly I think I need to comnvert this back to a dataframe for the table..
+    ## maybe i need to determine the file typei n the function to make it simpler
+    return generate_generic_DataTable(
+        pd.DataFrame(cluster_data)[0:100], "clusterDataTable_table"
+    )
+
 
 ### Now let's listen for click events, and for now we will NOT draw an ROI on the image as it
 ## is taking a weird amount of time, but we will actually generate the zoomed in image and display that
 
 
-@cache.memoize()
+# @cache.memoize()
 def getImageROI_fromGirder(imageId, startX, startY, roiSize):
     """Returns a numpy array of an image at base resolution at coordinates
     startX, startY of width/height=roiSize"""
@@ -139,10 +211,18 @@ def getImageROI_fromGirder(imageId, startX, startY, roiSize):
     return imageNP_array
 
 
-## TO BE DEBUGGED
+# Output("displayedPoints_table", "children"),
+
+
+@callback(Output("curROI_disp", "children"), Input("curROI_store", "data"))
+def updateCurrentROIinfo(curRoiInfo):
+    return html.Div(json.dumps(curRoiInfo))
+
+
+# ## TO BE DEBUGGED
 @callback(
     Output("roiDispArea", "children"),
-    Output("displayedPoints_table", "children"),
+    Output("curROI_store", "data"),
     Input("multiChannel-graph", "clickData"),
     Input("curImageProps_store", "data"),
     Input("viewportSize_select", "value"),
@@ -161,21 +241,21 @@ def renderROI_image(clickData, imageProps, viewportSize):
         fig = px.imshow(image_squeezed)
         fig = go.Figure(fig)
 
-        data_df["x_centroid"] = data_df["centroid-0"].astype(int)
-        data_df["y_centroid"] = data_df["centroid-1"].astype(int)
-
+        data_df["x_centroid"] = data_df["Cell_Centroid_X"].astype(int)
+        data_df["y_centroid"] = data_df["Cell_Centroid_Y"].astype(int)
+        print(data_df.head())
         filtered_data = data_df[
             (
                 (data_df["x_centroid"] >= startX)
-                & (data_df["x_centroid"] <= (startX + viewportSize))
+                & (data_df["x_centroid"] <= (startX + int(viewportSize)))
             )
             & (
                 (data_df["y_centroid"] >= startY)
-                & (data_df["y_centroid"] <= (startY + viewportSize))
+                & (data_df["y_centroid"] <= (startY + int(viewportSize)))
             )
         ]
 
-        print(data_df.head())
+        # print(data_df.head())
 
         x_values = filtered_data["x_centroid"].tolist()
         y_values = filtered_data["y_centroid"].tolist()
@@ -215,12 +295,13 @@ def renderROI_image(clickData, imageProps, viewportSize):
                 "displayModeBar": False,
                 # "modeBarButtonsToAdd": ["drawrect"],
             },
-        ), generate_generic_DataTable(filtered_data, "filtered_points")
+        ), {"startX": startX, "startY": startY, "viewportSize": viewportSize}
+    # generate_generic_DataTable(filtered_data, "filtered_points")
     else:
         return None, None
 
 
-# ### This won't do anything yet other than load the only Image I have locally saved...
+# # ### This won't do anything yet other than load the only Image I have locally saved...
 @callback(
     Output("mouseTracker", "children"),
     Input("multiChannel-graph", "hoverData"),
@@ -250,30 +331,21 @@ def trackMousePositionOnMCGraph(hoverData, imageProps):
 @cache.memoize()
 def loadBaseMultiChannelImage(imageName, frameNum):
     ## This actually only loads a single image, because I don't have more than one local image to use for this..
-    # img = Image.open("sample_image_for_pointdata.png")
-    # width, height = img.size
-    # fig, tileMetadata = generateMultiVizGraph("demo")
-
     imageProps = {}
-
-    # 649b3af5fbfabbf55f16e8b1 Single channel image
-
     if imageName == "anotherdemo":
         imageId = "649b78f3fbfabbf55f16fb0f"
         tileData = gc.get(f"item/{imageId}/tiles")
         imageProps = tileData
         imageProps["imageId"] = imageId
-
-        thumbnailWidth = 512
-
-        imageProps["thumbnailWidth"] = 512
+        thumbnailWidth = 768
+        imageProps["thumbnailWidth"] = thumbnailWidth
 
         imageProps["scaleFactor"] = imageProps["sizeX"] / thumbnailWidth
         # imageProps["yScaleFactor"] = imageProps["sizeY"] / thumbnailWidth
 
         ## Retrieve the currently selected image as a numpy array... or an image.. to be determined
         imageThumbnail_data = gc.get(
-            f"item/{imageId}/tiles/thumbnail?width={thumbnailWidth}&encoding=pickle",
+            f"item/{imageId}/tiles/thumbnail?width={thumbnailWidth}&frame={frameNum}&encoding=pickle",
             jsonResp=False,
         )
         thumb_np = pickle.loads(imageThumbnail_data.content)
@@ -284,9 +356,11 @@ def loadBaseMultiChannelImage(imageName, frameNum):
         # Convert the figure to a dictionary
         fig_dict = fig.to_dict()
 
-        return fig_dict, imageProps
-
-    return fig, imageProps
+        return (
+            fig_dict,
+            imageProps,
+        )
+    return dash.no_update, dash.no_update
 
 
 ## Bind/display the imageProps dictionary .. for now we can keep it ugly
