@@ -138,8 +138,9 @@ imageView_layout = html.Div(
         dbc.Row(
             dbc.Collapse(
                 [html.Div(id="displayedPoints_table")],
-                is_open=False,
+                is_open=True,
             ),
+            style={"maxHeight": 200},
         ),
         dbc.Row(
             [
@@ -155,6 +156,9 @@ imageView_layout = html.Div(
 
 ### FYI... THIS IS THE PART THAT TAKES LONG... PUSHING ALL THE DATA TO THE LOCAL DATASTORE
 ## I can probably refactor this significantly...
+
+
+## TO DO: ADD error handling if file doesn't exist
 @callback(Output("clusterData_store", "data"), Input("imageFeatureSet_select", "value"))
 @cache.memoize()
 def updateClusterDataStore(statsType):
@@ -167,12 +171,8 @@ def updateClusterDataStore(statsType):
     except:
         print("Input file is missing centroid params..")
 
-    # print(data.head())
     ## So the delay is happening here... loading all those points for whatever reason takes an oddly long time
     return data.to_dict()
-
-
-### Bind the clusterData_store and generate a data table that we can browse.
 
 
 ### This will generate a table of the points being displayed
@@ -193,10 +193,10 @@ def generateClusterDataTable(cluster_data):
 
 
 # @cache.memoize()
-def getImageROI_fromGirder(imageId, startX, startY, roiSize):
+def getImageROI_fromGirder(imageId, startX, startY, roiSize, frameNum=0):
     """Returns a numpy array of an image at base resolution at coordinates
     startX, startY of width/height=roiSize"""
-    imageUrl = f"item/{imageId}/tiles/region?left={startX}&top={startY}&regionWidth={roiSize}&regionHeight={roiSize}&encoding=pickle"
+    imageUrl = f"item/{imageId}/tiles/region?left={startX}&top={startY}&regionWidth={roiSize}&regionHeight={roiSize}&frame={frameNum}&encoding=pickle"
 
     try:
         imageData = gc.get(
@@ -211,9 +211,7 @@ def getImageROI_fromGirder(imageId, startX, startY, roiSize):
     return imageNP_array
 
 
-# Output("displayedPoints_table", "children"),
-
-
+## This stores the coordinates of the ROI that was just selected/clicked on the left Image
 @callback(Output("curROI_disp", "children"), Input("curROI_store", "data"))
 def updateCurrentROIinfo(curRoiInfo):
     return html.Div(json.dumps(curRoiInfo))
@@ -226,8 +224,9 @@ def updateCurrentROIinfo(curRoiInfo):
     Input("multiChannel-graph", "clickData"),
     Input("curImageProps_store", "data"),
     Input("viewportSize_select", "value"),
+    Input("clusterData_store", "data"),
 )
-def renderROI_image(clickData, imageProps, viewportSize):
+def renderROI_image(clickData, imageProps, viewportSize, clusterData):
     if clickData:
         x = clickData["points"][0]["x"]
         y = clickData["points"][0]["y"]
@@ -240,6 +239,8 @@ def renderROI_image(clickData, imageProps, viewportSize):
         image_squeezed = np.squeeze(region_np)
         fig = px.imshow(image_squeezed)
         fig = go.Figure(fig)
+
+        data_df = pd.DataFrame(clusterData)
 
         data_df["x_centroid"] = data_df["Cell_Centroid_X"].astype(int)
         data_df["y_centroid"] = data_df["Cell_Centroid_Y"].astype(int)
@@ -325,10 +326,11 @@ def trackMousePositionOnMCGraph(hoverData, imageProps):
 @callback(
     Output("multiChannel-graph", "figure"),
     Output("curImageProps_store", "data"),
+    Output("frame_select", "options"),
     Input("imageToRender_select", "value"),
     Input("frame_select", "value"),
 )
-@cache.memoize()
+# @cache.memoize()
 def loadBaseMultiChannelImage(imageName, frameNum):
     ## This actually only loads a single image, because I don't have more than one local image to use for this..
     imageProps = {}
@@ -341,7 +343,6 @@ def loadBaseMultiChannelImage(imageName, frameNum):
         imageProps["thumbnailWidth"] = thumbnailWidth
 
         imageProps["scaleFactor"] = imageProps["sizeX"] / thumbnailWidth
-        # imageProps["yScaleFactor"] = imageProps["sizeY"] / thumbnailWidth
 
         ## Retrieve the currently selected image as a numpy array... or an image.. to be determined
         imageThumbnail_data = gc.get(
@@ -355,12 +356,13 @@ def loadBaseMultiChannelImage(imageName, frameNum):
         fig = px.imshow(image_squeezed)
         # Convert the figure to a dictionary
         fig_dict = fig.to_dict()
+        # print(imageProps["channelmap"])
+        frameOptions = [
+            {"label": k, "value": v} for k, v in imageProps["channelmap"].items()
+        ]
 
-        return (
-            fig_dict,
-            imageProps,
-        )
-    return dash.no_update, dash.no_update
+        return (fig_dict, imageProps, frameOptions)
+    return dash.no_update, dash.no_update, dash.no_update
 
 
 ## Bind/display the imageProps dictionary .. for now we can keep it ugly
