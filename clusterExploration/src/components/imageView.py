@@ -22,7 +22,7 @@ from diskcache import FanoutCache
 cache_directory = ".localDashDiskCache"
 cache = FanoutCache(directory=cache_directory, shards=4)
 
-sampleCSVFile = "PosStats_MAP01938_0000_0E_01_region_001.csv"
+sampleCSVFile = "PosStats_MAP01938_0000_0E_01_region_001_labelled.csv"
 
 
 # # sampleCSVFile = "MAP01938_0000_0E_01_region_001_quantification.csv"
@@ -162,7 +162,7 @@ imageView_layout = html.Div(
 @callback(Output("clusterData_store", "data"), Input("imageFeatureSet_select", "value"))
 @cache.memoize()
 def updateClusterDataStore(statsType):
-    statsFileName = f"{statsType}_MAP01938_0000_0E_01_region_001.csv"
+    statsFileName = f"{statsType}_MAP01938_0000_0E_01_region_001_labelled.csv"
 
     data = pd.read_csv(statsFileName)
     try:
@@ -255,7 +255,7 @@ def renderROI_image(clickData, imageProps, viewportSize, clusterData):
                 & (data_df["y_centroid"] <= (startY + int(viewportSize)))
             )
         ]
-
+        cluster_labels = filtered_data["cluster_labels"].tolist()
         # print(data_df.head())
 
         x_values = filtered_data["x_centroid"].tolist()
@@ -266,8 +266,15 @@ def renderROI_image(clickData, imageProps, viewportSize, clusterData):
 
         ids = [chr(ord("A") + i) for i in range(len(x_values))]
 
+        valid_colors = ['red', 'yellow', 'green']
+        marker_colors = [valid_colors[label % len(valid_colors)] for label in cluster_labels]
+        marker_text = [f"Cluster: {label}" for label in cluster_labels]
+
+
+        #marker_text = [f"Cluster: {label}" for label in cluster_labels]
+
         points = pd.DataFrame(
-            {"x": x_values_rescaled, "y": y_values_rescaled, "id": ids}
+            {"x": x_values_rescaled, "y": y_values_rescaled, "id": ids, "text": marker_text, "color": marker_colors}
         )
 
         # Add the scatter plot
@@ -275,9 +282,9 @@ def renderROI_image(clickData, imageProps, viewportSize, clusterData):
             go.Scatter(
                 x=points["x"],
                 y=points["y"],
-                text=points["id"],
+                text=points["text"],
                 mode="markers",
-                marker=dict(size=3, color="yellow"),
+                marker=dict(size=6, color=marker_colors),
             )
         )
 
