@@ -1,6 +1,8 @@
 version: "3"
 volumes:
   postgis-data-volume:
+  mongodb-data-volume:
+
 services:
   mongodb:
     image: mongo:latest
@@ -9,9 +11,9 @@ services:
       MONGO_INITDB_ROOT_USERNAME: docker
       MONGO_INITDB_ROOT_PASSWORD: docker
     volumes:
-      - ./db:/data/db
+      - mongodb-data-volume:/data/db
     ports:
-      - "27017" ## Commend if you do not want anything outside of docker compose to connect
+      - 37017:27017 ## Comment if you do not want anything outside of docker compose to connect
     command: --maxConns 1000
 
     logging:

@@ -13,7 +13,8 @@ import numpy as np
 import plotly.express as px
 import dash.dcc as dcc
 import pickle
-
+from settings import dbConn
+import dbHelpers as dbh
 
 ### This will generate a dataview component, similar to what we have been using in Webix
 ## It expects a list of dictionaries, and then we can have various templates depending on
@@ -58,23 +59,21 @@ def generate_cards(subset, selected_size, cardType="image"):
                     dbc.Card(
                         [
                             dbc.CardBody(
-                                plotImageAnnotations(item["itemId"]),
+                                [
+                                    plotImageAnnotations(item["itemId"]),
+                                    html.H6(
+                                        item.get("annotation", None).get("name", None),
+                                        className="card-title no-wrap",
+                                    ),
+                                ],
                                 style={
                                     "height": sizes[selected_size]["image_size"],
                                     "width": sizes[selected_size]["image_size"],
                                 },
                             ),
-                            dbc.CardBody(
-                                [
-                                    html.H6(
-                                        item.get("annotation", None).get("name", None),
-                                        className="card-title no-wrap",
-                                    ),
-                                ]
-                            ),
                         ],
-                        className="mb-4",
-                        style={"width": "192px", "height": "192px", "margin": "2px"},
+                        className="mb-6",
+                        # style={"width": "192px", "height": "192px", "margin": "2px"},
                         id=card_id,  # add id to each card
                     ),
                     md=column_width,  # Adjusted column width
@@ -124,7 +123,7 @@ def generateDataViewLayout(itemSet, type="imageList"):
     size_selector = dbc.RadioItems(
         id="size-selector",
         options=[{"label": size.capitalize(), "value": size} for size in sizes],
-        value="small",  # Default value
+        value="large",  # Default value
         inline=True,
     )
 
@@ -152,8 +151,6 @@ def generateDataViewLayout(itemSet, type="imageList"):
         html.Div([size_selector, pagination]),  # Put these controls in a Div at the top
         html.Div(id="cards-container"),  # This Div will be populated by the callback
     ]
-
-    # return [size_selector, pagination, html.Div()]
 
 
 @callback(
@@ -186,6 +183,32 @@ def update_cards_and_pagination(active_page, selected_size, itemSet):
     return max_page, cards
 
 
+def getAnnotationShapesForItem(itemId, annotationName):
+    ## This will determine if mongo already has the elements data for the annotation, if not it will pull it, and cache it
+    ## just looking up tissue for now..
+    annotationName = "tissue"
+
+    ## Find all the annotations available for the currently selecetd itemId and annotationName
+    availableAnnotations = dbConn["annotationData"].find(
+        {"itemId": itemId, "annotation.name": annotationName}
+    )
+
+    for aa in availableAnnotations:
+        if "elements" not in aa.get("annotatoins", {}):
+            ## Need to get the elements from girder... this takes a long time at scale
+
+            annotElements = gc.get(f"annotation/{aa['_id']}")
+            if annotElements:
+                ## Update Mongo..
+                dbh.insertAnnotationData([annotElements])
+
+    ## Now that I have checked everything is in mongo.. requery and pull the entire thing
+    availableAnnotations = dbConn["annotationData"].find(
+        {"itemId": itemId, "annotation.name": annotationName}
+    )
+    return list(availableAnnotations)
+
+
 def plotImageAnnotations(
     imageId, annotationName="ManualGrayMatter", plotSeparateShapes=False
 ):
@@ -216,11 +239,16 @@ def plotImageAnnotations(
     imageSizeInfo = gc.get(f"item/{imageId}/tiles")  ### I should probably cache this...
 
     # if there are no ROIs, no need to do anything but return the image for viz
-    imageAnnotationRawData = gc.get(f"annotation?itemId={imageId}&text=tissue")
-    imageAnnotationData = []
 
-    for ia in imageAnnotationRawData:
-        imageAnnotationData.append(gc.get(f"annotation/{ia['_id']}"))
+    ## Adding in code to cache elements if they are not available...
+
+    # imageAnnotationRawData = gc.get(f"annotation?itemId={imageId}&text=tissue")
+    # imageAnnotationData = []
+
+    imageAnnotationData = getAnnotationShapesForItem(imageId, annotationName)
+
+    # for ia in imageAnnotationRawData:
+    #     imageAnnotationData.append(gc.get(f"annotation/{ia['_id']}"))
 
     x_scale_factor = imageSizeInfo["sizeX"] / baseImage_as_np.shape[1]
     y_scale_factor = imageSizeInfo["sizeY"] / baseImage_as_np.shape[0]
@@ -290,7 +318,9 @@ def plotImageAnnotations(
     )
 
     return dcc.Graph(
-        figure=annotFig, config={"displayModeBar": False}  # this removes the toolbar
+        figure=annotFig,
+        style={"width": "100%", "height": "100%"},
+        config={"displayModeBar": False},  # this removes the toolbar
     )
 
     ## May want to eventually add a check that pulls the point data if an item does not have any elements
