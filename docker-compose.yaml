@@ -18,25 +18,25 @@ services:
       options:
         max-size: "10M"
         max-file: "5"
-  postgisdb:
-    build: postgisdbWpgvector/
-    volumes:
-      - postgis-data-volume:/var/lib/postgresql/data
-    environment:
-      # If you need to create multiple database you can add coma separated databases eg gis,data
-      - POSTGRES_DB=dsagis
-      - POSTGRES_USER=docker
-      - POSTGRES_PASS=docker
-      - ALLOW_IP_RANGE=0.0.0.0/0
-      - POSTGRES_HOST_AUTH_METHOD=trust ## Not necessarily the best idea longterm..
-      #- DATADIR=/opt/postgres/data
-      # Add extensions you need to be enabled by default in the DB. Default are the five specified below
-      - POSTGRES_MULTIPLE_EXTENSIONS=postgis,hstore,postgis_topology,postgis_raster,pgrouting,pgvector
-    ports:
-      - 5432:5432
-    restart: on-failure
-    healthcheck:
-      test: "exit 0"
+  # postgisdb:
+  #   build: postgisdbWpgvector/
+  #   volumes:
+  #     - postgis-data-volume:/var/lib/postgresql/data
+  #   environment:
+  #     # If you need to create multiple database you can add coma separated databases eg gis,data
+  #     - POSTGRES_DB=dsagis
+  #     - POSTGRES_USER=docker
+  #     - POSTGRES_PASS=docker
+  #     - ALLOW_IP_RANGE=0.0.0.0/0
+  #     - POSTGRES_HOST_AUTH_METHOD=trust ## Not necessarily the best idea longterm..
+  #     #- DATADIR=/opt/postgres/data
+  #     # Add extensions you need to be enabled by default in the DB. Default are the five specified below
+  #     - POSTGRES_MULTIPLE_EXTENSIONS=postgis,hstore,postgis_topology,postgis_raster,pgrouting,pgvector
+  #   ports:
+  #     - 5432:5432
+  #   restart: on-failure
+  #   healthcheck:
+  #     test: "exit 0"
   # datascience-notebook:
   #   container_name: dsapostgisnb
   #   build: dsapostgisnb/
@@ -49,38 +49,38 @@ services:
   #     - "8888"
   #   depends_on:
   #     - postgisdb
-  pgadmin4:
-    image: dpage/pgadmin4
-    container_name: pgadmin4
-    ports:
-      - '5050:80'
-    environment:
-      PGADMIN_DEFAULT_EMAIL: dsagis@dsagis.io
-      PGADMIN_DEFAULT_PASSWORD: dsagis
-    links:
-      - postgisdb
-    depends_on:
-      - postgisdb
-  fastapi:
-    container_name: dsapostgisapi
-    build: fastapi/
-    command: bash -c 'while !</dev/tcp/postgisdb/5432; do sleep 1; done; uvicorn app.main:app --host 0.0.0.0 --port 82 --reload'
-    ports:
-      - "82:82"
-    expose:
-      - "82"
-    depends_on:
-      - postgisdb
-    volumes:
-      - ${PWD}/fastapi/app:/code/app
-  osdgisviewer:
-    build: osdGisViewer/
-    expose:
-      - "3000"
-      - "35729" # For livereload
-    container_name: osdgisviewer
-    ports:
-      - "3000:3000"
-      - "35729:35729"
-    volumes:
-      - ${PWD}/osdGisViewer:/app
+  # pgadmin4:
+  #   image: dpage/pgadmin4
+  #   container_name: pgadmin4
+  #   ports:
+  #     - '5050:80'
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: dsagis@dsagis.io
+  #     PGADMIN_DEFAULT_PASSWORD: dsagis
+  #   links:
+  #     - postgisdb
+  #   depends_on:
+  #     - postgisdb
+  # fastapi:
+  #   container_name: dsapostgisapi
+  #   build: fastapi/
+  #   command: bash -c 'while !</dev/tcp/postgisdb/5432; do sleep 1; done; uvicorn app.main:app --host 0.0.0.0 --port 82 --reload'
+  #   ports:
+  #     - "82:82"
+  #   expose:
+  #     - "82"
+  #   depends_on:
+  #     - postgisdb
+  #   volumes:
+  #     - ${PWD}/fastapi/app:/code/app
+  # osdgisviewer:
+  #   build: osdGisViewer/
+  #   expose:
+  #     - "3000"
+  #     - "35729" # For livereload
+  #   container_name: osdgisviewer
+  #   ports:
+  #     - "3000:3000"
+  #     - "35729:35729"
+  #   volumes:
+  #     - ${PWD}/osdGisViewer:/app
