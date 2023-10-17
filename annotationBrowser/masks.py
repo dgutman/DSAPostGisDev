@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from PIL import Image
 import numpy as np
 from dash import dcc
+import pandas as pd
 
 DSAKEY = os.getenv("DSAKEY")
 DSA_BASE_URL = "https://megabrain.neurology.emory.edu/api/v1"
@@ -40,3 +41,42 @@ fig_combined = plot_image_and_mask(img, mask)
 
 
 masks_export = html.Div(dcc.Graph(figure=fig_combined))
+
+data = []
+
+img_file_path = f'image_{item["_id"]}.png'
+mask_file_path = f'mask_{item["_id"]}.png'
+    
+img_pil = Image.fromarray(img)
+img_pil.save(img_file_path)
+
+mask_pil = Image.fromarray(mask)
+mask_pil.save(mask_file_path)
+    
+data.append({'fp': img_file_path, 'label': mask_file_path})
+
+# for i in item:
+#     img, mask = get_thumbnail_with_mask(
+#         gc, 
+#         item['_id'], 
+#         512,
+#         annotation_docs='ManualGrayMatter',
+#         annotation_groups=None,
+#         fill=None,
+#         return_contour=False
+#     )
+    
+#     img_file_path = f'image_{item["_id"]}.png'
+#     mask_file_path = f'mask_{item["_id"]}.png'
+    
+#     img_pil = Image.fromarray(img)
+#     img_pil.save(img_file_path)
+
+#     mask_pil = Image.fromarray(mask)
+#     mask_pil.save(mask_file_path)
+    
+#     data.append({'fp': img_file_path, 'label': mask_file_path})
+
+df = pd.DataFrame(data)
+
+df.to_csv('image_and_mask_paths.csv', index=False)
