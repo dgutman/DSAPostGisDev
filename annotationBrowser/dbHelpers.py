@@ -1,6 +1,25 @@
 import pymongo
 from settings import dbConn
 from pprint import pprint
+import numpy as np
+from joblib import Memory
+from time import time
+from functools import wraps
+
+memory = Memory(".npCacheDir", verbose=0)
+
+
+def timing(f):
+    @wraps(f)
+    def wrap(*args, **kw):
+        ts = time()
+        result = f(*args, **kw)
+        te = time()
+        #        print("func:%r args:[%r, %r] took: %2.4f sec" % (f.__name__, args, kw, te - ts))
+        print("func:%r  took: %2.4f sec" % (f.__name__, te - ts))
+        return result
+
+    return wrap
 
 
 def chunks(lst, n):

@@ -27,3 +27,10 @@ mongoConn = pymongo.MongoClient(
     MONGO_URI, username=MONGODB_USERNAME, password=MONGODB_PASSWORD
 )
 dbConn = mongoConn[MONGODB_DB]
+
+dbConn["annotationData"].create_index("annotation.name")
+
+dbConn["annotationData"].create_index("itemId")
+
+
+dbConn["annotationData"].create_index(["itemId", "annotation.name"])

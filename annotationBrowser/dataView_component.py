@@ -1,11 +1,8 @@
-from dash import html
-from dash import Input, Output, State, ALL, callback
 import dash_bootstrap_components as dbc
 from settings import DSA_BASE_URL, gc
-import dash
-from pprint import pprint
-from dash import html, Input, Output, State, dcc, callback_context, callback
 import dash, json
+from pprint import pprint
+from dash import html, Input, Output, State, dcc, callback_context, callback, ALL
 import plotly.graph_objects as go
 
 # from ...utils.api import get_item_rois, pull_thumbnail_array, get_largeImageInfo
@@ -16,23 +13,51 @@ import pickle
 from settings import dbConn
 import dbHelpers as dbh
 
+from joblib import Memory
+
+memory = Memory(".npCacheDir", verbose=0)
+
 ### This will generate a dataview component, similar to what we have been using in Webix
 ## It expects a list of dictionaries, and then we can have various templates depending on
 ## what type of visualization we want, can also add the keys to display on the template, etc
 
 # Define the image and page sizes for each option
 sizes = {
-    "small": {"image_size": "128px", "page_size": 12},
-    "medium": {"image_size": "192px", "page_size": 10},
-    "large": {"image_size": "256px", "page_size": 5},
+    "small": {
+        "image_width": "128px",
+        "image_height": "92px",
+        "page_size": 12,
+    },
+    "medium": {
+        "image_width": "256px",
+        "image_height": "200px",
+        "page_size": 18,
+    },
+    "large": {
+        "image_width": "330px",
+        "image_height": "260px",
+        "page_size": 8,
+    },
 }
 
 
 images_per_row = {
-    "small": 6,
-    "medium": 5,
-    "large": 3,
+    "small": 8,
+    "medium": 6,
+    "large": 4,
 }
+
+
+@memory.cache
+def getImageThumb_as_NP(imageId, imageWidth=512):
+    ## TO DO: Cache this?
+    pickledItem = gc.get(
+        f"item/{imageId}/tiles/thumbnail?encoding=pickle", jsonResp=False
+    )
+    ## Need to have or cache the baseImage size as well... another feature to add
+
+    baseImage_as_np = pickle.loads(pickledItem.content)
+    return baseImage_as_np
 
 
 def getThumbnailUrl(imageId, encoding="PNG", height=128):
@@ -48,7 +73,6 @@ cardTemplates = {}
 def generate_cards(subset, selected_size, cardType="image"):
     cards_and_tooltips = []
 
-    print("Card Type was set to", cardType)
     for index, item in enumerate(subset):
         card_id = f"card-{index}"
         column_width = 12 // images_per_row[selected_size]
@@ -67,8 +91,8 @@ def generate_cards(subset, selected_size, cardType="image"):
                                     ),
                                 ],
                                 style={
-                                    "height": sizes[selected_size]["image_size"],
-                                    "width": sizes[selected_size]["image_size"],
+                                    "height": sizes[selected_size]["image_height"],
+                                    "width": sizes[selected_size]["image_width"],
                                 },
                             ),
                         ],
@@ -88,8 +112,8 @@ def generate_cards(subset, selected_size, cardType="image"):
                                 src=getThumbnailUrl(item["_id"]),
                                 top=True,
                                 style={
-                                    "height": sizes[selected_size]["image_size"],
-                                    "width": sizes[selected_size]["image_size"],
+                                    "height": sizes[selected_size]["image_height"],
+                                    "width": sizes[selected_size]["image_width"],
                                 },
                             ),
                             dbc.CardBody(
@@ -115,7 +139,6 @@ def generate_cards(subset, selected_size, cardType="image"):
                 target=card_id,
             )
         )
-
     return cards_and_tooltips
 
 
@@ -148,7 +171,9 @@ def generateDataViewLayout(itemSet, type="imageList"):
 
     # cards = dbc.Row(cards_and_tooltips, justify="start")
     return [
-        html.Div([size_selector, pagination]),  # Put these controls in a Div at the top
+        dbc.Row(
+            [dbc.Col(pagination, width=3), dbc.Col(size_selector, width=3)]
+        ),  # Put these controls in a Div at the top
         html.Div(id="cards-container"),  # This Div will be populated by the callback
     ]
 
@@ -183,6 +208,13 @@ def update_cards_and_pagination(active_page, selected_size, itemSet):
     return max_page, cards
 
 
+@memory.cache
+def getImageInfo(imageId):
+    ## This will return the size and other params for the image
+    imageSizeInfo = gc.get(f"item/{imageId}/tiles")  ### I should probably cache this...
+    return imageSizeInfo
+
+
 def getAnnotationShapesForItem(itemId, annotationName):
     ## This will determine if mongo already has the elements data for the annotation, if not it will pull it, and cache it
     ## just looking up tissue for now..
@@ -192,11 +224,9 @@ def getAnnotationShapesForItem(itemId, annotationName):
     availableAnnotations = dbConn["annotationData"].find(
         {"itemId": itemId, "annotation.name": annotationName}
     )
-
     for aa in availableAnnotations:
-        if "elements" not in aa.get("annotatoins", {}):
+        if "elements" not in aa.get("annotation", {}):
             ## Need to get the elements from girder... this takes a long time at scale
-
             annotElements = gc.get(f"annotation/{aa['_id']}")
             if annotElements:
                 ## Update Mongo..
@@ -209,6 +239,7 @@ def getAnnotationShapesForItem(itemId, annotationName):
     return list(availableAnnotations)
 
 
+# @dbh.timing
 def plotImageAnnotations(
     imageId, annotationName="ManualGrayMatter", plotSeparateShapes=False
 ):
@@ -218,37 +249,21 @@ def plotImageAnnotations(
 
     By default, I am not going to show every shape individually, although in the future I may want to do
     stats and double check individual shape obhects are actually closed
-    What I am talking about is that say we are drawing ROIs or drawing a gray matter boundary.  Even though
+    What I am talking about is that say we are drawing ROIs or drawing gray matter boundary.  Even though
     every shape is an ROI, or every shape is gray matter, I could potentially draw them as different polygons
     so I may (or may not) want to merge the shapes into a single labeled object, or keep them separate.
     This will be expanded upon going forward..
     """
 
-    ## TO DO: Cache this?
-    pickledItem = gc.get(
-        f"item/{imageId}/tiles/thumbnail?encoding=pickle", jsonResp=False
-    )
-
     ## Need to have or cache the baseImage size as well... another feature to add
 
-    baseImage_as_np = pickle.loads(pickledItem.content)
-    annotFig = go.Figure(
-        px.imshow(baseImage_as_np)
-    )  # , color_continuous_scale="gray"))
-
-    imageSizeInfo = gc.get(f"item/{imageId}/tiles")  ### I should probably cache this...
+    baseImage_as_np = getImageThumb_as_NP(imageId)
+    annotFig = go.Figure(px.imshow(baseImage_as_np))
+    ## This pulls the mm_x, mm_y and full resolution for the given image
+    imageSizeInfo = getImageInfo(imageId)
 
     # if there are no ROIs, no need to do anything but return the image for viz
-
-    ## Adding in code to cache elements if they are not available...
-
-    # imageAnnotationRawData = gc.get(f"annotation?itemId={imageId}&text=tissue")
-    # imageAnnotationData = []
-
     imageAnnotationData = getAnnotationShapesForItem(imageId, annotationName)
-
-    # for ia in imageAnnotationRawData:
-    #     imageAnnotationData.append(gc.get(f"annotation/{ia['_id']}"))
 
     x_scale_factor = imageSizeInfo["sizeX"] / baseImage_as_np.shape[1]
     y_scale_factor = imageSizeInfo["sizeY"] / baseImage_as_np.shape[0]
@@ -284,9 +299,6 @@ def plotImageAnnotations(
         # print(cmp)
 
         if len(cpa):
-            # print(cpa)
-            # if cpa:
-
             x_values = [
                 (pt[0] / x_scale_factor if pt[0] is not None else None) for pt in cpa
             ]
@@ -306,6 +318,10 @@ def plotImageAnnotations(
 
     annotFig.update_layout(
         margin=dict(l=0, r=0, b=0, t=0),  # removes margins
+        xaxis=dict(showticklabels=False),
+        yaxis=dict(showticklabels=False),
+        plot_bgcolor="white",  # background of the plotting area
+        paper_bgcolor="white",
         legend=dict(
             x=0.5,
             y=0.1,
