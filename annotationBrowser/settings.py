@@ -33,4 +33,4 @@ dbConn["annotationData"].create_index("annotation.name")
 dbConn["annotationData"].create_index("itemId")
 
 
-dbConn["annotationData"].create_index(["itemId", "annotation.name"])
+dbConn["annotationData"].create_index([("itemId",1), ("annotation.name",1)])
