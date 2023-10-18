@@ -55,6 +55,12 @@ def exportMaskData(n_clicks, itemData):
         # item = itemData["data"][0]
         data = []
         maskOutputObjects = []
+
+        images_folder = "images"
+        masks_folder = "masks"
+        os.makedirs(images_folder, exist_ok=True)
+        os.makedirs(masks_folder, exist_ok=True)
+        
         for item in items[:5]:
             print(f"Processing {item['name']}")
             img, mask = get_thumbnail_with_mask(
@@ -67,8 +73,8 @@ def exportMaskData(n_clicks, itemData):
                 return_contour=False,  # If you want contours returned
             )
 
-            img_file_path = f'image_{item["_id"]}.png'
-            mask_file_path = f'mask_{item["_id"]}.png'
+            img_file_path = os.path.join(images_folder, f'image_{item["_id"]}.png')
+            mask_file_path = os.path.join(masks_folder, f'mask_{item["_id"]}.png')
             img_pil = Image.fromarray(img)
             img_pil.save(img_file_path)
 
@@ -80,7 +86,8 @@ def exportMaskData(n_clicks, itemData):
             fig_combined = plot_image_and_mask(img, mask)
 
             maskOutputObjects.append(dcc.Graph(figure=fig_combined))
-
+        df = pd.DataFrame(data)
+        df.to_csv("images_and_mask.csv",index=False)
         # masksOutputObjects.appen
         print("Returning data soon..")
         return maskOutputObjects
