@@ -10,7 +10,7 @@ import numpy as np
 import plotly.express as px
 import dash.dcc as dcc
 import pickle
-from settings import dbConn
+from settings import dbConn, USER
 import dbHelpers as dbh
 
 from joblib import Memory
@@ -218,7 +218,6 @@ def getImageInfo(imageId):
 def getAnnotationShapesForItem(itemId, annotationName):
     ## This will determine if mongo already has the elements data for the annotation, if not it will pull it, and cache it
     ## just looking up tissue for now..
-    annotationName = "tissue"
 
     ## Find all the annotations available for the currently selecetd itemId and annotationName
     availableAnnotations = dbConn["annotationData"].find(
@@ -230,7 +229,7 @@ def getAnnotationShapesForItem(itemId, annotationName):
             annotElements = gc.get(f"annotation/{aa['_id']}")
             if annotElements:
                 ## Update Mongo..
-                dbh.insertAnnotationData([annotElements])
+                dbh.insertAnnotationData([annotElements], USER)
 
     ## Now that I have checked everything is in mongo.. requery and pull the entire thing
     availableAnnotations = dbConn["annotationData"].find(

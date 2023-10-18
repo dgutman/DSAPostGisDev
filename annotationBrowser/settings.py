@@ -11,6 +11,8 @@ if DSAKEY:
     gc.authenticate(apiKey=DSAKEY)
 
 
+USER = "admin"
+
 ## MONGO CONNECTION INFORMATION
 
 MONGO_URI = "localhost:37017"

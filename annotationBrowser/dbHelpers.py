@@ -5,6 +5,9 @@ import numpy as np
 from joblib import Memory
 from time import time
 from functools import wraps
+from settings import USER
+from dash import html
+import dash_ag_grid as dag
 
 memory = Memory(".npCacheDir", verbose=0)
 
@@ -59,9 +62,13 @@ def getAnnotationElementCount(annotationName):
     return results
 
 
-def insertAnnotationData(annotationItems, debug=False):
+def insertAnnotationData(annotationItems, userName, debug=False):
     ### This will insert all of the annotations pulled from the DSA and
     #
+
+    annotationItems = [dict(item, **{"userName": userName}) for item in annotationItems]
+    ## TO DO: Change all the keys from _id to dsaID.. need to see if this breaks anything else
+
     operations = []
     for a in annotationItems:
         operations.append(
@@ -72,3 +79,82 @@ def insertAnnotationData(annotationItems, debug=False):
         if debug:
             pprint(result.bulk_api_result)
     return result
+
+
+def getAnnotationNameCount(userName, itemListFilter=None):
+    """This will query the mongo database directly and get the distinct annotation names and the associated counts"""
+    """The user name is added to segregate data
+        The ItemListFilter will allow me to filter by a list of itemID's based on either the currentProject
+        or currentTask depending on what options are passed otherwise it will return all annotations a user has access too
+    
+    """
+    match_query = {"userName": USER}
+
+    if itemListFilter:
+        match_query["itemId"] = {"$in": itemListFilter}
+    # # Select your collection
+    collection = mc["annotationData"]
+
+    # Define the aggregation pipeline
+    pipeline = [
+        {"$match": match_query},
+        {
+            "$group": {
+                "_id": "$annotation.name",
+                "total": {"$sum": 1},
+                "with_elements": {
+                    "$sum": {
+                        "$cond": [{"$ifNull": ["$annotation.elements", False]}, 1, 0]
+                    }
+                },
+            }
+        },
+        {
+            "$project": {
+                "annotationName": "$_id",
+                "count": "$total",
+                "count_with_elements": "$with_elements",
+                "_id": 0,
+            }
+        },
+        {"$sort": {"count": -1}},
+    ]
+
+    # s# # Execute the aggregation pipeline
+    results = list(collection.aggregate(pipeline))
+    return results
+
+
+def generate_generic_DataTable(df, id_val, col_defs={}, exportable=False):
+    col_defs = [{"field": col} for col in df.columns] if not col_defs else col_defs
+
+    dsa_datatable = html.Div(
+        [
+            dag.AgGrid(
+                id=id_val,
+                enableEnterpriseModules=True,
+                className="ag-theme-alpine-dark",
+                defaultColDef={
+                    "filter": "agSetColumnFilter",
+                    "editable": True,
+                    # "flex": 1,
+                    "filterParams": {"debounceMs": 2500},
+                    "floatingFilter": True,
+                    "sortable": True,
+                    "resizable": True,
+                },
+                columnDefs=col_defs,
+                rowData=df.to_dict("records"),
+                dashGridOptions={"pagination": True, "paginationAutoPageSize": True},
+                # columnSize="sizeToFit",
+                csvExportParams={
+                    "fileName": f"{id_val.replace('-', '_')}.csv",
+                }
+                if exportable
+                else {},
+                style={"height": "75vh"},
+            ),
+        ]
+    )
+
+    return dsa_datatable

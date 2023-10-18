@@ -1,7 +1,7 @@
 from dash import html, callback, Input, Output, State, dcc
 import dash_bootstrap_components as dbc
 import os, json
-from settings import gc, dbConn
+from settings import gc, dbConn, USER
 from dataView_component import generateDataViewLayout
 from pprint import pprint
 import pymongo
@@ -10,39 +10,7 @@ from functools import wraps
 from time import time
 from dbHelpers import timing
 
-annotationDocs = ["tissue", "gray"]
-
-button_controls = html.Div(
-    [
-        html.Button(
-            id="cancel_button_id",
-            className="mr-2 btn btn-danger",
-            children="Cancel Running Job!",
-        ),
-        html.Button(
-            "Refresh anotation data",
-            className="mr-2 btn btn-primary",
-            id="refresh-annotations-button",
-        ),
-        html.Button(
-            "Pull Full Annotation",
-            id="pull-full-annotation-button",
-            className="mr-2 btn btn-warning",
-        ),
-        html.Button(
-            "Pull Girder Annotations",
-            id="pull-from-girder-button",
-            className="mr-2 btn btn-warning",
-        ),
-        html.Button(
-            "Clear Cache",
-            id="clear-cache-button",
-            className="mr-2 btn btn-warning",
-        ),
-    ],
-    className="d-grid gap-2 d-md-flex justify-content-md-begin",
-)
-
+annotationDocs = ["tissue", "gray", "ManualGrayMatter"]
 
 annotation_panel = html.Div(
     [
@@ -72,7 +40,6 @@ annotation_panel = html.Div(
                     width=2,
                 ),
                 dbc.Col([html.Div(id="annotationStatsPanel")], width=2),
-                dbc.Col(button_controls),
             ]
         ),
         dbc.Row(
@@ -126,10 +93,11 @@ def generateAnnotationDataViewPanel(annotationData):
 
 
 @timing
-def getAnnotationData_from_mongo(annotationName, debug=False):
+def getAnnotationData_from_mongo(annotationName, USER, debug=False):
     ### This will insert all of the annotations pulled from the DSA and
     result = dbConn["annotationData"].find(
-        {"annotation.name": annotationName}, {"annotation.elements": 0}
+        {"userName": USER, "annotation.name": annotationName},
+        {"annotation.elements": 0},
     )
     ## Remeber this thing is a cursor, you may also want to prefilter out some of the fields that we don't need
     if result:
@@ -139,21 +107,19 @@ def getAnnotationData_from_mongo(annotationName, debug=False):
 
 
 ## Simple function to pull annotations based on the name from the DSA itself..
-
-
 @timing
 def lookupImageAnnotationsByName(annotationName, limit=0, refreshDataBase=False):
     ## See if any documents exist for the
     collection = dbConn["annotationData"]
-    docCount = collection.count_documents({})
-
+    docCount = collection.count_documents({"annotation.name": "annotationName"})
+    print(f"Found {docCount} docs with {annotationName}")
     if not docCount or refreshDataBase:
         annotationDocs = gc.get(f"annotation?text={annotationName}&limit={limit}")
 
         if annotationDocs:
-            dbh.insertAnnotationData(annotationDocs)
+            dbh.insertAnnotationData(annotationDocs, USER)
 
-    annotationDocs = getAnnotationData_from_mongo(annotationName)
+    annotationDocs = getAnnotationData_from_mongo(annotationName, USER)
     return annotationDocs
 
 
@@ -165,5 +131,4 @@ def lookupImageAnnotationsByName(annotationName, limit=0, refreshDataBase=False)
 def updateItemStore(annotationName):
     if annotationName:
         annotationDocs = lookupImageAnnotationsByName(annotationName)
-        print(annotationDocs[1])
         return {"displayType": "annotationDoc", "data": annotationDocs}
