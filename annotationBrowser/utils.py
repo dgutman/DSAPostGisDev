@@ -200,24 +200,27 @@ def get_contours_from_annotations(annotation_docs):
     contours = []
 
     for doc in annotation_docs:
-        for element in doc["annotation"]["elements"]:
-            if element["type"] == "polyline":
-                contour = []
+        ann = doc.get('annotation', {})
 
-                for xyz in element["points"]:
-                    contour.append([int(xyz[0]), int(xyz[1])])
+        if 'element' in ann:
+            for element in doc["annotation"]["elements"]:
+                if element["type"] == "polyline":
+                    contour = []
 
-                contour = np.array(contour, dtype=int)
+                    for xyz in element["points"]:
+                        contour.append([int(xyz[0]), int(xyz[1])])
 
-                if len(contour) > 2:
-                    contours.append(contour)
+                    contour = np.array(contour, dtype=int)
+
+                    if len(contour) > 2:
+                        contours.append(contour)
 
     return contours
 
 
 def get_thumbnail_with_mask(
     gc,
-    item_id,
+    doc,
     size,
     annotation_docs=None,
     annotation_groups=None,
@@ -243,19 +246,18 @@ def get_thumbnail_with_mask(
         returns the scaled down contours.
 
     """
-    # Get thumbnail image.
-    thumbnail = get_thumbnail(gc, item_id, shape=(size, size))
-
     # Annotation documents.
-    annotation_docs = get_annotations_documents(
-        gc, item_id, doc_names=annotation_docs, groups=annotation_groups
-    )
+    # annotation_docs = get_annotations_documents(
+    #     gc, item_id, doc_names=annotation_docs, groups=annotation_groups
+    # )
+
+    thumbnail = get_thumbnail(gc, doc["itemId"], shape=(size, size))
 
     # Extract annotation elements as contours.
-    contours = get_contours_from_annotations(annotation_docs)
+    contours = get_contours_from_annotations([doc])
 
     # Get shape of the WSI.
-    tile_metadata = get_tile_metadata(gc, item_id)
+    tile_metadata = get_tile_metadata(gc, doc["itemId"])
 
     # Downscale contours to thumbnail size.
     mask = np.zeros(thumbnail.shape[:2], dtype=np.uint8)
@@ -277,7 +279,8 @@ def get_thumbnail_with_mask(
             mask, 0, size - h, 0, size - w, cv.BORDER_CONSTANT, value=0
         )
 
-    if return_contour:
-        return thumbnail, mask, contours
-    else:
-        return thumbnail, mask
+        if return_contour:
+            return thumbnail, mask, contours
+        else:
+            return thumbnail, mask
+    return thumbnail,mask

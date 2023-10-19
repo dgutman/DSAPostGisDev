@@ -48,46 +48,62 @@ def exportMaskData(n_clicks, itemData):
     """This will generate a pytorch friendly set of thumbnails, masks, and CSV data for training"""
     ## Probably want to check the dataType of the itemData as well and make sure it's in mask mode..
     if n_clicks and itemData:
+        items = itemData['data']
         ## Just use 1 image for now..
-        items = get_items(gc, "641ba814867536bb7a225533")
-        item = items[0]
+        # items = get_items(gc, "641ba814867536bb7a225533")
+        # item = items[0]
 
-        # item = itemData["data"][0]
-        data = []
-        maskOutputObjects = []
-
+        # # item = itemData["data"][0]
+        # data = []
+        # maskOutputObjects = []
+        d = []
         images_folder = "images"
         masks_folder = "masks"
         os.makedirs(images_folder, exist_ok=True)
         os.makedirs(masks_folder, exist_ok=True)
+
+        print(len(items), 'this is how many docs I have')
         
-        for item in items[:5]:
-            print(f"Processing {item['name']}")
-            img, mask = get_thumbnail_with_mask(
-                gc,
-                item["_id"],
-                512,  # Size to get, if fill not specified then width is prioritized to keep aspect ratio
-                annotation_docs="ManualGrayMatter",  # List of annotation documents or single annotation document
-                annotation_groups=None,  # subset to only a specific list or single annotation group
-                fill=None,  # if this is not None, then the returned images are the exact shape fed in, with this RGB as padding
-                return_contour=False,  # If you want contours returned
-            )
+        for item in items:
+            try:
+            #print(f"Processing {item['itemId']}")
+            
+            # if 'largeImage' in item:
+            #     continue
+            # res = item.get("annotation",{}).get("name")
+            # if res == "ManualGrayMatter":
+                name = item.get('annotation', {}).get('name')
 
-            img_file_path = os.path.join(images_folder, f'image_{item["_id"]}.png')
-            mask_file_path = os.path.join(masks_folder, f'mask_{item["_id"]}.png')
-            img_pil = Image.fromarray(img)
-            img_pil.save(img_file_path)
+                if name == "ManualGrayMatter":
+                    # print("in IF statement", name)
+                    # continue
+                    img, mask = get_thumbnail_with_mask(
+                        gc,
+                        #item["_id"],
+                        item,
+                        512,  # Size to get, if fill not specified then width is prioritized to keep aspect ratio
+                        annotation_docs="ManualGrayMatter",  # List of annotation documents or single annotation document
+                        annotation_groups=None,  # subset to only a specific list or single annotation group
+                        fill=None,  # if this is not None, then the returned images are the exact shape fed in, with this RGB as padding
+                        return_contour=False,  # If you want contours returned
+                    )
 
-            mask_pil = Image.fromarray(mask)
-            mask_pil.save(mask_file_path)
+                    img_file_path = os.path.join(images_folder, f'image_{item["itemId"]}.png')
+                    mask_file_path = os.path.join(masks_folder, f'mask_{item["itemId"]}.png')
+                    img_pil = Image.fromarray(img)
+                    img_pil.save(img_file_path)
 
-            data.append({"fp": img_file_path, "label": mask_file_path})
+                    mask_pil = Image.fromarray(mask)
+                    mask_pil.save(mask_file_path)
 
-            fig_combined = plot_image_and_mask(img, mask)
+                    d.append({"fp": img_file_path, "label": mask_file_path})
+            except Exception as e:
+                print("Error loading this image")
+            #fig_combined = plot_image_and_mask(img, mask)
 
-            maskOutputObjects.append(dcc.Graph(figure=fig_combined))
-        df = pd.DataFrame(data)
+            #maskOutputObjects.append(dcc.Graph(figure=fig_combined))
+        df = pd.DataFrame(d)
         df.to_csv("images_and_mask.csv",index=False)
         # masksOutputObjects.appen
         print("Returning data soon..")
-        return maskOutputObjects
+        #return maskOutputObjects
