@@ -113,12 +113,13 @@ def lookupImageAnnotationsByName(annotationName, limit=0, refreshDataBase=False)
     collection = dbConn["annotationData"]
     docCount = collection.count_documents({"annotation.name": "annotationName"})
     print(f"Found {docCount} docs with {annotationName}")
-    if not docCount or refreshDataBase:
+    if refreshDataBase:
         annotationDocs = gc.get(f"annotation?text={annotationName}&limit={limit}")
 
         if annotationDocs:
             dbh.insertAnnotationData(annotationDocs, USER)
 
+    ## Add in something to wipe the database if refreshDatabase was selected...
     annotationDocs = getAnnotationData_from_mongo(annotationName, USER)
     return annotationDocs
 
