@@ -29,7 +29,7 @@ def login(apiurl, username=None, password=None):
     return gc
 
 
-def get_items(gc, parent_id):
+def get_items(gc, parent_id, limit=25):
     """Recursively gets items in a collection or folder parent location.
 
     Args:
@@ -42,7 +42,7 @@ def get_items(gc, parent_id):
     """
     try:
         items = gc.get(
-            f"resource/{parent_id}/items?type=collection&limit=0&sort="
+            f"resource/{parent_id}/items?type=collection&limit={limit}&sort="
             + "_id&sortdir=1"
         )
     except HttpError:
@@ -200,9 +200,9 @@ def get_contours_from_annotations(annotation_docs):
     contours = []
 
     for doc in annotation_docs:
-        ann = doc.get('annotation', {})
+        ann = doc.get("annotation", {})
 
-        if 'element' in ann:
+        if "element" in ann:
             for element in doc["annotation"]["elements"]:
                 if element["type"] == "polyline":
                     contour = []
@@ -283,4 +283,4 @@ def get_thumbnail_with_mask(
             return thumbnail, mask, contours
         else:
             return thumbnail, mask
-    return thumbnail,mask
+    return thumbnail, mask

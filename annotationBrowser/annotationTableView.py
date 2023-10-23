@@ -17,6 +17,16 @@ curAppObject = SingletonDashApp()
 app = curAppObject.app
 
 
+# import diskcache
+# from dash.long_callback import CeleryLongCallbackManager
+# from app_config import celery_app
+
+# cache = diskcache.Cache("./cache")
+# background_callback_manager = DiskcacheLongCallbackManager(cache)
+
+
+print(background_callback_manager)
+
 button_controls = html.Div(
     [
         html.Button(
@@ -63,6 +73,7 @@ annotationTable_layout = dbc.Container(
                 style={"visibility": "hidden", "width": 250},
             ),
             html.Div(id="annotationPull_status"),
+            html.Div(id="annotationCount_tableDiv"),
             html.Div(id="dbStatus_output"),
             dbc.Row(
                 [
@@ -80,13 +91,11 @@ annotationTable_layout = dbc.Container(
 
 
 @callback(
-    Output("dbStatus_output", "children"), Input("clear-cache-button", "n_clicks")
+    Output("annotationCount_tableDiv", "children"),
+    Input("refresh-annotations-button", "n_clicks"),
 )
-def clearDataCache(n_clicks):
-    """This fires if the clear cache button is fired, this should delete both the mongo data and any cached npArray data"""
-    totalDocCount = dbConn["annotationData"].count_documents({})
-
-    ## Fire off asynchronous callback
+def generateAnnotationCountTable(n_clicks):
+    ### This fires initially, and can be updated manually because the table may get upgraded in the background
     elementCount = dbh.getAnnotationElementCount("tissue")
 
     elementCountTable = dbh.generate_generic_DataTable(
@@ -95,10 +104,27 @@ def clearDataCache(n_clicks):
 
     return elementCountTable
 
-    if n_clicks:
-        print("Clearing cache..")
-        dbConn["annotationData"].delete_many({})
-        ## Should include the username in the next version..
+
+# @callback(
+#     Output("dbStatus_output", "children"), Input("clear-cache-button", "n_clicks")
+# )
+# def clearDataCache(n_clicks):
+#     """This fires if the clear cache button is fired, this should delete both the mongo data and any cached npArray data"""
+#     totalDocCount = dbConn["annotationData"].count_documents({})
+
+#     ## Fire off asynchronous callback
+#     elementCount = dbh.getAnnotationElementCount("tissue")
+
+#     elementCountTable = dbh.generate_generic_DataTable(
+#         pd.DataFrame(elementCount), "annotElementCount_table"
+#     )
+
+#     return elementCountTable
+
+#     if n_clicks:
+#         print("Clearing cache..")
+#         dbConn["annotationData"].delete_many({})
+#         ## Should include the username in the next version..
 
 
 @callback(
@@ -106,25 +132,25 @@ def clearDataCache(n_clicks):
     inputs=[
         Input("pull-full-annotation-button", "n_clicks"),
     ],
-    # running=[
-    #     (Output("pull-full-annotation-button", "disabled"), True, False),
-    #     (Output("cancel_button_id", "disabled"), False, True),
-    #     (
-    #         Output("annotationPull_status", "style"),
-    #         {"visibility": "hidden"},
-    #         {"visibility": "visible"},
-    #     ),
-    #     (
-    #         Output("annotationDetails_update_pbar", "style"),
-    #         {"visibility": "visible"},
-    #         {"visibility": "hidden"},
-    #     ),
-    #     (
-    #         Output("annotationDetails_update_pbar", "style"),
-    #         {"visibility": "visible"},
-    #         {"visibility": "visible"},
-    #     ),
-    # ],
+    running=[
+        (Output("pull-full-annotation-button", "disabled"), True, False),
+        (Output("cancel_button_id", "disabled"), False, True),
+        (
+            Output("annotationPull_status", "style"),
+            {"visibility": "hidden"},
+            {"visibility": "visible"},
+        ),
+        (
+            Output("annotationDetails_update_pbar", "style"),
+            {"visibility": "visible"},
+            {"visibility": "hidden"},
+        ),
+        (
+            Output("annotationDetails_update_pbar", "style"),
+            {"visibility": "visible"},
+            {"visibility": "visible"},
+        ),
+    ],
     # cancel=[Input("cancel_button_id", "n_clicks")],
     # progress=[
     #     Output("annotationDetails_update_pbar", "value"),
@@ -151,11 +177,8 @@ def pull_annotation_elements(n_clicks):
         docCount = collection.count_documents(
             {"annotation.elements": {"$exists": False}, "userName": USER}
         )
-        # "userName": USER, "
-        # Since I am still debugging,I don't want to run this on more than 100 docs as a time
 
         print(f"There are a total of {docCount} annotations to look up")
-
         docCount = 1000
 
         for i in range(docCount):

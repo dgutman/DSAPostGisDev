@@ -10,15 +10,16 @@ import diskcache
 
 ## Could/should check if redis is avialable
 
-REDIS_URL = "redis://localhost:6379"
-
+REDIS_URL = "redis://redis:6379"
+# REDIS_URL = None
 
 if REDIS_URL:
     # Use Redis & Celery if REDIS_URL set as an env variable
     from celery import Celery
 
-    celery_app = Celery(__name__, broker=REDIS_URL, backend=REDIS_URL)
+    celery_app = Celery(__name__, broker=REDIS_URL, backend=REDIS_URL, include=["app"])
     background_callback_manager = CeleryManager(celery_app)
+    print("Loading redis background")
 
 else:
     # Diskcache for non-production apps when developing locally
@@ -26,6 +27,8 @@ else:
 
     cache = diskcache.Cache("./cache")
     background_callback_manager = DiskcacheManager(cache)
+
+print(background_callback_manager)
 
 
 ## This creates a single dash instance that I can access from multiple modules

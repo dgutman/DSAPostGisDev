@@ -1,10 +1,7 @@
 from dash import html, callback, Input, Output, State, dcc
 import dash_bootstrap_components as dbc
-import os, json
 from settings import gc, dbConn, USER
 from dataView_component import generateDataViewLayout
-from pprint import pprint
-import pymongo
 import dbHelpers as dbh
 from functools import wraps
 from time import time

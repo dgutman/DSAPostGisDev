@@ -162,3 +162,9 @@ cython_debug/
 db/
 .localDashDiskCache/
 annotationBrowser/.npCacheDir/*
+
+*neurotk-cache*
+
+*npCacheDir*
+.DS_Store
+.vscode/settings.json

@@ -48,7 +48,7 @@ def exportMaskData(n_clicks, itemData):
     """This will generate a pytorch friendly set of thumbnails, masks, and CSV data for training"""
     ## Probably want to check the dataType of the itemData as well and make sure it's in mask mode..
     if n_clicks and itemData:
-        items = itemData['data']
+        items = itemData["data"]
         ## Just use 1 image for now..
         # items = get_items(gc, "641ba814867536bb7a225533")
         # item = items[0]
@@ -62,24 +62,24 @@ def exportMaskData(n_clicks, itemData):
         os.makedirs(images_folder, exist_ok=True)
         os.makedirs(masks_folder, exist_ok=True)
 
-        print(len(items), 'this is how many docs I have')
-        
+        print(len(items), "this is how many docs I have")
+
         for item in items:
             try:
-            #print(f"Processing {item['itemId']}")
-            
-            # if 'largeImage' in item:
-            #     continue
-            # res = item.get("annotation",{}).get("name")
-            # if res == "ManualGrayMatter":
-                name = item.get('annotation', {}).get('name')
+                # print(f"Processing {item['itemId']}")
+
+                # if 'largeImage' in item:
+                #     continue
+                # res = item.get("annotation",{}).get("name")
+                # if res == "ManualGrayMatter":
+                name = item.get("annotation", {}).get("name")
 
                 if name == "ManualGrayMatter":
                     # print("in IF statement", name)
                     # continue
                     img, mask = get_thumbnail_with_mask(
                         gc,
-                        #item["_id"],
+                        # item["_id"],
                         item,
                         512,  # Size to get, if fill not specified then width is prioritized to keep aspect ratio
                         annotation_docs="ManualGrayMatter",  # List of annotation documents or single annotation document
@@ -88,8 +88,12 @@ def exportMaskData(n_clicks, itemData):
                         return_contour=False,  # If you want contours returned
                     )
 
-                    img_file_path = os.path.join(images_folder, f'image_{item["itemId"]}.png')
-                    mask_file_path = os.path.join(masks_folder, f'mask_{item["itemId"]}.png')
+                    img_file_path = os.path.join(
+                        images_folder, f'image_{item["itemId"]}.png'
+                    )
+                    mask_file_path = os.path.join(
+                        masks_folder, f'mask_{item["itemId"]}.png'
+                    )
                     img_pil = Image.fromarray(img)
                     img_pil.save(img_file_path)
 
@@ -99,11 +103,11 @@ def exportMaskData(n_clicks, itemData):
                     d.append({"fp": img_file_path, "label": mask_file_path})
             except Exception as e:
                 print("Error loading this image")
-            #fig_combined = plot_image_and_mask(img, mask)
+            # fig_combined = plot_image_and_mask(img, mask)
 
-            #maskOutputObjects.append(dcc.Graph(figure=fig_combined))
+            # maskOutputObjects.append(dcc.Graph(figure=fig_combined))
         df = pd.DataFrame(d)
-        df.to_csv("images_and_mask.csv",index=False)
+        df.to_csv("images_and_mask.csv", index=False)
         # masksOutputObjects.appen
         print("Returning data soon..")
-        #return maskOutputObjects
+        # return maskOutputObjects
