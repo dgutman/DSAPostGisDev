@@ -8,6 +8,7 @@ from functools import wraps
 from settings import USER
 from dash import html
 import dash_ag_grid as dag
+import pandas as pd
 
 memory = Memory(".npCacheDir", verbose=0)
 
@@ -126,6 +127,12 @@ def getAnnotationNameCount(userName, itemListFilter=None):
 
 
 def generate_generic_DataTable(df, id_val, col_defs={}, exportable=False):
+    # print("Dataframe type?")
+    # print(type(df))
+
+    # if type(df == list):
+    #     df = pd.DataFrame(df)
+
     col_defs = [{"field": col} for col in df.columns] if not col_defs else col_defs
 
     dsa_datatable = html.Div(
@@ -136,7 +143,7 @@ def generate_generic_DataTable(df, id_val, col_defs={}, exportable=False):
                 className="ag-theme-alpine-dark",
                 defaultColDef={
                     "filter": "agSetColumnFilter",
-                    "editable": True,
+                    # "editable": True,
                     # "flex": 1,
                     "filterParams": {"debounceMs": 2500},
                     "floatingFilter": True,
@@ -145,7 +152,11 @@ def generate_generic_DataTable(df, id_val, col_defs={}, exportable=False):
                 },
                 columnDefs=col_defs,
                 rowData=df.to_dict("records"),
-                dashGridOptions={"pagination": True, "paginationAutoPageSize": True},
+                dashGridOptions={
+                    "pagination": True,
+                    "paginationAutoPageSize": True,
+                    "rowSelection": "single",
+                },
                 # columnSize="sizeToFit",
                 csvExportParams={
                     "fileName": f"{id_val.replace('-', '_')}.csv",

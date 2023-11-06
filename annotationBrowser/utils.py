@@ -166,9 +166,13 @@ def get_thumbnail(gc, item_id, shape=None, fill=None):
         request += f"&fill=rgb({fill[0]}%2C{fill[1]}%2C{fill[2]})"
 
     request += "&encoding=PNG"
-
-    thumbnail = np.array(Image.open(BytesIO(gc.get(request, jsonResp=False).content)))
-
+    try:
+        thumbnail = np.array(
+            Image.open(BytesIO(gc.get(request, jsonResp=False).content))
+        )
+    except:
+        print("Thumbnail pull failled")
+        return None
     return thumbnail
 
 

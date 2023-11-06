@@ -51,12 +51,17 @@ images_per_row = {
 @memory.cache
 def getImageThumb_as_NP(imageId, imageWidth=512):
     ## TO DO: Cache this?
-    pickledItem = gc.get(
-        f"item/{imageId}/tiles/thumbnail?encoding=pickle", jsonResp=False
-    )
-    ## Need to have or cache the baseImage size as well... another feature to add
+    try:
+        pickledItem = gc.get(
+            f"item/{imageId}/tiles/thumbnail?encoding=pickle", jsonResp=False
+        )
 
-    baseImage_as_np = pickle.loads(pickledItem.content)
+        ## Need to have or cache the baseImage size as well... another feature to add
+
+        baseImage_as_np = pickle.loads(pickledItem.content)
+    except:
+        return None
+
     return baseImage_as_np
 
 
@@ -258,8 +263,12 @@ def plotImageAnnotations(
 
     ## Need to have or cache the baseImage size as well... another feature to add
 
-    baseImage_as_np = getImageThumb_as_NP(imageId)
-    annotFig = go.Figure(px.imshow(baseImage_as_np))
+    try:
+        baseImage_as_np = getImageThumb_as_NP(imageId)
+        annotFig = go.Figure(px.imshow(baseImage_as_np))
+    except:
+        print("Something wrong when getting image", imageId)
+        return None
     ## This pulls the mm_x, mm_y and full resolution for the given image
     imageSizeInfo = getImageInfo(imageId)
 

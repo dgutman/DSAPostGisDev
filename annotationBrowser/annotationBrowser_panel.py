@@ -5,7 +5,7 @@ from dataView_component import generateDataViewLayout
 import dbHelpers as dbh
 from functools import wraps
 from time import time
-from dbHelpers import timing
+from dbHelpers import timing, insertAnnotationData
 
 annotationDocs = ["tissue", "gray", "ManualGrayMatter"]
 
@@ -71,6 +71,13 @@ annotation_panel = html.Div(
 @timing
 def pullAnnotationStats(n_clicks):
     totalDocCount = dbConn["annotationData"].count_documents({})
+
+    if totalDocCount == 0:
+        print("No Elements stored yet!!")
+
+        docName = "tissue"
+        docSet = gc.get(f"annotation?name={docName}&limit=0")
+        insertAnnotationData(docSet, USER)
 
     ## Fire off asynchronous callback
     # elementCount = dbh.getAnnotationElementCount("tissue")

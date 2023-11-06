@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import pymongo
 import socket
 
+load_dotenv()
 
 DSAKEY = os.getenv("DSAKEY")
 DSA_BASE_URL = "https://megabrain.neurology.emory.edu/api/v1"
