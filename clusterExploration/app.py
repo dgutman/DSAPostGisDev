@@ -11,6 +11,9 @@ from src.components.banner import banner_layout
 import dash_mantine_components as dmc
 from src.components.imageView import imageView_layout
 
+
+from imagePreProcessing import imagePreprocess_panel
+
 # from src.components.featureConfusionMatrix import featureConfusionMatrix_layout
 # from src.components.dendogram import dendogram_layout
 
@@ -22,16 +25,18 @@ tab_layout = dmc.Tabs(
                 dmc.Tab("imageView", value="imageView"),
                 dmc.Tab("Feature Confusion Matrix", value="featureConfusionMatrix"),
                 dmc.Tab("Dendogram", value="dendogram"),
+                dmc.Tab("Preprocessor", value="preprocess"),
             ]
         ),
         # dmc.TabsPanel(featureDataTable_layout, value="clusterData"),
         dmc.TabsPanel(imageView_layout, value="imageView"),
+        dmc.TabsPanel(imagePreprocess_panel, value="preprocess"),
         # dmc.TabsPanel(featureConfusionMatrix_layout, value="featureConfusionMatrix"),
         # dmc.TabsPanel(dendogram_layout,value="dendogram")
     ],
     color="blue",
     orientation="horizontal",
-    value="imageView",
+    value="preprocess",
 )
 
 

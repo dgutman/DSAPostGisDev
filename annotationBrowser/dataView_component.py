@@ -76,7 +76,7 @@ def generate_cards(subset, selected_size, cardType="image"):
     for index, item in enumerate(subset):
         card_id = f"card-{index}"
         column_width = 12 // images_per_row[selected_size]
-        print(item)
+
         if cardType == "annotationDoc":
             cards_and_tooltips.append(
                 dbc.Col(

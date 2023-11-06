@@ -3,29 +3,24 @@ from dash import html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
 import dash
 from settings import dbConn, gc, USER
-from app_config import SingletonDashApp, background_callback_manager
+from app_config import SingletonDashApp  # , background_callback_manager
 import dbHelpers as dbh
 from pprint import pprint
-import json
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
+## Trying to add diskcache functionality
+import diskcache
+
+# from dash.long_callback import DiskcacheLongCallbackManager
+
+cache = diskcache.Cache("./cache", timeout=10)
+background_callback_manager = dash.DiskcacheManager(cache)
 
 ## Creating tables here..
-# app = app.app  ## I find this extremely confusing
 curAppObject = SingletonDashApp()
 
 app = curAppObject.app
-
-
-# import diskcache
-# from dash.long_callback import CeleryLongCallbackManager
-# from app_config import celery_app
-
-# cache = diskcache.Cache("./cache")
-# background_callback_manager = DiskcacheLongCallbackManager(cache)
-
-
-print(background_callback_manager)
 
 button_controls = html.Div(
     [
@@ -96,6 +91,7 @@ annotationTable_layout = dbc.Container(
 )
 def generateAnnotationCountTable(n_clicks):
     ### This fires initially, and can be updated manually because the table may get upgraded in the background
+
     elementCount = dbh.getAnnotationElementCount("tissue")
 
     elementCountTable = dbh.generate_generic_DataTable(
@@ -151,53 +147,124 @@ def generateAnnotationCountTable(n_clicks):
             {"visibility": "visible"},
         ),
     ],
-    # cancel=[Input("cancel_button_id", "n_clicks")],
-    # progress=[
-    #     Output("annotationDetails_update_pbar", "value"),
-    #     Output("annotationDetails_update_pbar", "label"),
-    # ],
+    cancel=Input("cancel_button_id", "n_clicks"),
+    progress=[
+        Output("annotationDetails_update_pbar", "value"),
+        Output("annotationDetails_update_pbar", "label"),
+    ],
     prevent_initial_call=True,
     # background=True,
     # manager=background_callback_manager,
 )
-def pull_annotation_elements(n_clicks):
-    """When I pull annotation in bulk, we do not return individual elelements
-    as if can be very slow, so this will grab elements in the background and update"""
-    # print(n_clicks)
+# set_progress,
+def pull_annotation_elements(n_clicks, max_workers=5):
     if n_clicks:
-        # print("Something indeed was clicked...")
-
         collection = dbConn["annotationData"]
-
-        ## Fix logic here in case there aRE no documents with missing elements..
-        # Count documents where the "elements" key does not exist filtered by USER
-        ## This may eventually cause errors if multiple users have access to the same annotation
         USER = "admin"
-
         docCount = collection.count_documents(
             {"annotation.elements": {"$exists": False}, "userName": USER}
         )
-
         print(f"There are a total of {docCount} annotations to look up")
-        docCount = 1000
 
-        for i in range(docCount):
-            ## pull and update a single annotation document
-            # find a document that has no elements
-            if i % 50 == 0:
-                print(i)
-            doc_with_no_element = collection.find_one(
-                {"userName": USER, "annotation.elements": {"$exists": False}}
-            )
-            ## Now pull the data from the api
-            # print(doc_with_no_element)
-            fullAnnotationDoc = gc.get(f"annotation/{doc_with_no_element['_id']}")
-            collection.update_one(
-                {"_id": doc_with_no_element["_id"], "userName": USER},
-                {"$set": fullAnnotationDoc},
-            )
+        if docCount == 0:
+            return dash.no_update
 
-            jobStatuspercent = ((i + 1) / docCount) * 100
-            # set_progress((str(i + 1), f"{jobStatuspercent:.2f}%"))
+        if docCount > 1000:
+            docCount = 1000  ## For debugging want to put a limit on this
+
+        docsWithNoElements = collection.find(
+            {"annotation.elements": {"$exists": False}, "userName": USER}
+        ).limit(docCount)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Distribute the work across the threads
+            futures = [
+                executor.submit(
+                    update_annotation, set_progress, i, docsWithNoElements, USER
+                )
+                for i in range(docCount)
+            ]
+
+            # Wait for all futures to complete
+            concurrent.futures.wait(futures)
+
         return dash.no_update
-    # return [f"Clicked {n_clicks} times"] ## I actually don't want this div to be updated
+
+
+# def pull_annotation_elements(set_progress, n_clicks):
+#     """When I pull annotation in bulk, we do not return individual elelements
+#     as if can be very slow, so this will grab elements in the background and update"""
+#     # print(n_clicks)
+#     if n_clicks:
+#         # print("Something indeed was clicked...")
+#         collection = dbConn["annotationData"]
+
+#         ## Fix logic here in case there aRE no documents with missing elements..
+#         # Count documents where the "elements" key does not exist filtered by USER
+#         ## This may eventually cause errors if multiple users have access to the same annotation
+#         USER = "admin"
+
+#         docCount = collection.count_documents(
+#             {"annotation.elements": {"$exists": False}, "userName": USER}
+#         )
+
+#         print(f"There are a total of {docCount} annotations to look up")
+#         docCount = 1000
+
+#         for i in range(docCount):
+#             ## pull and update a single annotation document
+#             # find a document that has no elements
+#             if i % 50 == 0:
+#                 print(i)
+#             doc_with_no_element = collection.find_one(
+#                 {"userName": USER, "annotation.elements": {"$exists": False}}
+#             )
+#             ## Now pull the data from the api
+#             # print(doc_with_no_element)
+#             # print(gc.token, "is token..")
+#             fullAnnotationDoc = gc.get(f"annotation/{doc_with_no_element['_id']}")
+#             collection.update_one(
+#                 {"_id": doc_with_no_element["_id"], "userName": USER},
+#                 {"$set": fullAnnotationDoc},
+#             )
+
+#             jobStatuspercent = ((i + 1) / docCount) * 100
+#             set_progress((str(i + 1), f"{jobStatuspercent:.2f}%"))
+#         return dash.no_update
+# return [f"Clicked {n_clicks} times"] ## I actually don't want this div to be updated
+
+# if nometa_button:
+#     with ThreadPoolExecutor() as executor:
+#         results = list(
+#             executor.map(
+#                 process_row, itemlist_data, [s.COLS_FOR_COPY] * len(itemlist_data)
+#             )
+#         )
+
+#     return results, "merged-data"
+
+
+import concurrent.futures
+
+
+def update_annotation(set_progress, i, docList, USER):
+    collection = dbConn["annotationData"]
+    # Find a document that has no elements
+    doc_with_no_element = docList[i]
+    # print(i, doc_with_no_element)
+    # If no document is found, return early
+    if doc_with_no_element is None:
+        return
+
+    # Pull the data from the API
+    fullAnnotationDoc = gc.get(f"annotation/{doc_with_no_element['_id']}")
+
+    # Update the document in the database
+    status = collection.update_one(
+        {"_id": doc_with_no_element["_id"], "userName": USER},
+        {"$set": fullAnnotationDoc},
+    )
+    # print(status)
+    # Update the progress
+    jobStatuspercent = ((i + 1) / len(docList)) * 100
+    set_progress((str(i + 1), f"{jobStatuspercent:.2f}%"))

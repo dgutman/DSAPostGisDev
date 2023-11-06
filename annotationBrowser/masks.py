@@ -10,13 +10,14 @@ from dash import dcc
 import pandas as pd
 import dash_bootstrap_components as dbc
 import json
+from settings import gc
 
-DSAKEY = os.getenv("DSAKEY")
-DSA_BASE_URL = "https://megabrain.neurology.emory.edu/api/v1"
+# DSAKEY = os.getenv("DSAKEY")
+# DSA_BASE_URL = "https://megabrain.neurology.emory.edu/api/v1"
 
-gc = girder_client.GirderClient(apiUrl=DSA_BASE_URL)
-if DSAKEY:
-    gc.authenticate(apiKey=DSAKEY)
+# gc = girder_client.GirderClient(apiUrl=DSA_BASE_URL)
+# if DSAKEY:
+#     gc.authenticate(apiKey=DSAKEY)
 
 ## --------------------------------------------------------------------
 ## WE ARE LINKING THIS PANEL TO THE DATA STORE from the annotaionPanel..

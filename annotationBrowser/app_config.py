@@ -1,32 +1,28 @@
 import dash
 from dash.long_callback import (
-    DiskcacheLongCallbackManager,
     CeleryLongCallbackManager,
-    DiskcacheManager,
-    CeleryManager,
 )
 import dash_bootstrap_components as dbc
-import diskcache
+from settings import REDIS_URL
 
-## Could/should check if redis is avialable
+# Use Redis & Celery if REDIS_URL set as an env variable
+from celery import Celery
 
-REDIS_URL = "redis://redis:6379"
-# REDIS_URL = None
+print("Trying to connect to", REDIS_URL)
+celery_app = Celery(
+    __name__,
+    broker=REDIS_URL + "/0",
+    backend=REDIS_URL + "/1",
+)
 
-if REDIS_URL:
-    # Use Redis & Celery if REDIS_URL set as an env variable
-    from celery import Celery
+background_callback_manager = CeleryLongCallbackManager(celery_app)
 
-    celery_app = Celery(__name__, broker=REDIS_URL, backend=REDIS_URL, include=["app"])
-    background_callback_manager = CeleryManager(celery_app)
-    print("Loading redis background")
+# else:
+#     # Diskcache for non-production apps when developing locally
+#     import diskcache
 
-else:
-    # Diskcache for non-production apps when developing locally
-    import diskcache
-
-    cache = diskcache.Cache("./cache")
-    background_callback_manager = DiskcacheManager(cache)
+#     cache = diskcache.Cache("./cache")
+#     background_callback_manager = DiskcacheManager(cache)
 
 print(background_callback_manager)
 
@@ -49,13 +45,6 @@ class SingletonDashApp:
                 title="NeuroTK Dashboard",
             )
         return cls._instance
-
-
-# cache = diskcache.Cache("./neurotk-cache", timeout=5)
-# lcm = DiskcacheLongCallbackManager(cache)
-
-# cache = diskcache.Cache("./neurotk-cache-directory")
-# background_callback_manager = dash.DiskcacheManager(cache)
 
 
 app = SingletonDashApp().app

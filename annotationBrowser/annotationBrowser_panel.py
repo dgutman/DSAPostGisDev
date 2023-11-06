@@ -111,6 +111,7 @@ def lookupImageAnnotationsByName(annotationName, limit=0, refreshDataBase=False)
     docCount = collection.count_documents({"annotation.name": "annotationName"})
     print(f"Found {docCount} docs with {annotationName}")
     if refreshDataBase:
+        print(gc.token)
         annotationDocs = gc.get(f"annotation?text={annotationName}&limit={limit}")
 
         if annotationDocs:

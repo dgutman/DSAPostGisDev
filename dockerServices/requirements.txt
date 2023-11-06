@@ -2,3 +2,7 @@ redis
 celery
 flower
 flask
+dash
+dash_bootstrap_components
+dash_mantine_components
+

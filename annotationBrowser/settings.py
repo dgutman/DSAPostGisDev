@@ -7,7 +7,7 @@ import socket
 
 DSAKEY = os.getenv("DSAKEY")
 DSA_BASE_URL = "https://megabrain.neurology.emory.edu/api/v1"
-
+print(DSAKEY, "is dsa key")
 gc = girder_client.GirderClient(apiUrl=DSA_BASE_URL)
 if DSAKEY:
     gc.authenticate(apiKey=DSAKEY)
@@ -20,11 +20,13 @@ USER = "admin"
 ## Determine if I can connect to mongo and redis
 
 try:
-   redis_host = socket.gethostbyname('redis')
-   print(redis_host)
-except:
-   print("Host lookup failed for REDIS")
+    redis_host = socket.gethostbyname("redis")
+    # print(redis_host)
+    REDIS_URL = "redis://redis:6379"
 
+except:
+    print("Host lookup failed for REDIS")
+    REDIS_URL = "redis://localhost:6379"
 
 
 MONGO_URI = "localhost:37017"

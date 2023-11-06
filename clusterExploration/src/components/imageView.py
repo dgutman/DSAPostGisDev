@@ -91,7 +91,7 @@ imageView_layout = html.Div(
                     id="imageFeatureSet_select",
                     options=["MedStats", "PosStats"],
                     style={"maxWidth": 300},
-                    value="MedStats",
+                    value="PosStats",
                     className="me-1",
                 ),
                 dbc.Select(
@@ -160,7 +160,7 @@ imageView_layout = html.Div(
 
 ## TO DO: ADD error handling if file doesn't exist
 @callback(Output("clusterData_store", "data"), Input("imageFeatureSet_select", "value"))
-@cache.memoize()
+# @cache.memoize()
 def updateClusterDataStore(statsType):
     statsFileName = f"{statsType}_MAP01938_0000_0E_01_region_001_labelled.csv"
 
@@ -266,15 +266,22 @@ def renderROI_image(clickData, imageProps, viewportSize, clusterData):
 
         ids = [chr(ord("A") + i) for i in range(len(x_values))]
 
-        valid_colors = ['red', 'yellow', 'green']
-        marker_colors = [valid_colors[label % len(valid_colors)] for label in cluster_labels]
+        valid_colors = ["red", "yellow", "green"]
+        marker_colors = [
+            valid_colors[label % len(valid_colors)] for label in cluster_labels
+        ]
         marker_text = [f"Cluster: {label}" for label in cluster_labels]
 
-
-        #marker_text = [f"Cluster: {label}" for label in cluster_labels]
+        # marker_text = [f"Cluster: {label}" for label in cluster_labels]
 
         points = pd.DataFrame(
-            {"x": x_values_rescaled, "y": y_values_rescaled, "id": ids, "text": marker_text, "color": marker_colors}
+            {
+                "x": x_values_rescaled,
+                "y": y_values_rescaled,
+                "id": ids,
+                "text": marker_text,
+                "color": marker_colors,
+            }
         )
 
         # Add the scatter plot
