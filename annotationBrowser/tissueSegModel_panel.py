@@ -12,6 +12,7 @@ import dash_core_components as dcc
 import plotly.graph_objs as go
 import numpy as np
 from models import val_transforms
+from models import uNet
 sampleFolderId = "645b9e006df8ba8751a909dd"
 
 
@@ -24,9 +25,15 @@ col_defs = [{"field": "_id"}, {"field": "name"}]
 
 tissueSegModel_panel = html.Div(
     [
-        html.Div("Still need glasses?"),
         generate_generic_DataTable(df, "sampleImageList_table", col_defs),
-        html.Div(id="modelOutput_div"),
+        # html.Div(id="modelOutput_div"),
+        # html.Div(id="tissueOutput_div"),
+        dbc.Row(
+            [
+                dbc.Col(html.Div(id="modelOutput_div")),
+                dbc.Col(html.Div(id="tissueOutput_div")),
+            ]
+        ),
     ]
 )
 
@@ -36,6 +43,13 @@ model.load_state_dict(
                   map_location=torch.device('cpu'))
    )
 model.eval()
+
+tissueSeg_model = uNet(in_channels=3,out_channels=1)
+tissueSeg_model.load_state_dict(
+      torch.load('tissueModelbest.pt', 
+                  map_location=torch.device('cpu'))
+   )
+tissueSeg_model.eval()
 
 def reshape_with_pad(img, size, pad = (255, 255, 255)):
     """Reshape an image into a square aspect ratio without changing the original
@@ -66,7 +80,7 @@ def selected(selected):
 
         #        image_as_np = getImageThumb_as_NP(selected[0]["_id"])
 
-        image_fig = plotImageAnnotations(imageId)
+        #image_fig = plotImageAnnotations(imageId)
         image_copy= getImageThumb_as_NP(imageId)
         image_with_contours = image_copy.copy()
         orig_shape = (image_copy.shape[1], image_copy.shape[0])
@@ -79,7 +93,52 @@ def selected(selected):
         pred = pred.astype(np.uint8) * 255
         pred = cv.resize(pred, (orig_shape[0], orig_shape[1]), interpolation=cv.INTER_NEAREST)
         contours, hierarchy  = cv.findContours(pred, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        epsilon = 0.002 * cv.arcLength(contours[0], True)  
+        cv.drawContours(image_with_contours, contours, -1, (0, 0, 255), 2)
+        image_with_contours_trace = go.Image(z=image_with_contours)
+
+
+        layout = go.Layout(
+            #title=selected[0]["name"],
+            title = "Gray Matter Model",
+            showlegend=False
+        )
+        fig = go.Figure(data=[image_with_contours_trace], layout=layout)
+
+        return dbc.Container([
+            # dbc.Row([
+            #     dbc.Col(html.Div(selected[0]["name"]))
+            # ]),
+            dbc.Row([
+                #dbc.Col(image_fig), 
+                dbc.Col(dcc.Graph(figure=fig))
+            ])
+        ])
+
+
+@callback(
+    Output("tissueOutput_div", "children"),
+    Input("sampleImageList_table", "selectedRows"),
+)
+def selected(selected):
+    if selected:
+        imageId = selected[0]["_id"]
+
+        #        image_as_np = getImageThumb_as_NP(selected[0]["_id"])
+
+        #image_fig = plotImageAnnotations(imageId)
+        image_copy= getImageThumb_as_NP(imageId)
+        image_with_contours = image_copy.copy()
+        orig_shape = (image_copy.shape[1], image_copy.shape[0])
+        image_copy = image_copy[:, :, :3]
+        image = val_transforms(image_copy)
+        with torch.set_grad_enabled(False):
+            image = image.unsqueeze(0)
+            pred = tissueSeg_model(image)
+        pred = (pred[0][0] > 0.5).data.cpu().numpy()
+        pred = pred.astype(np.uint8) * 255
+        pred = cv.resize(pred, (orig_shape[0], orig_shape[1]), interpolation=cv.INTER_NEAREST)
+        contours, hierarchy  = cv.findContours(pred, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        #epsilon = 0.002 * cv.arcLength(contours[0], True)  
         #smoothed_contours = [cv.approxPolyDP(cnt, epsilon, True) for cnt in contours]
         #image_trace = go.Image(z=image_copy)
         #mask_trace = go.Contour(z=pred, showscale=False, contours=dict(showlines=False))
@@ -93,7 +152,8 @@ def selected(selected):
         # )
 
         layout = go.Layout(
-            title=selected[0]["name"],
+            #title=selected[0]["name"],
+            title = "Tissue Detector Model",
             showlegend=False
         )
 
@@ -101,15 +161,14 @@ def selected(selected):
         fig = go.Figure(data=[image_with_contours_trace], layout=layout)
 
         return dbc.Container([
+            # dbc.Row([
+            #     dbc.Col(html.Div(selected[0]["name"]))
+            # ]),
             dbc.Row([
-                dbc.Col(html.Div(selected[0]["name"]))
-            ]),
-            dbc.Row([
-                dbc.Col(image_fig), 
+                #dbc.Col(image_fig), 
                 dbc.Col(dcc.Graph(figure=fig))
             ])
         ])
 
-    return "No selections"
 
 
