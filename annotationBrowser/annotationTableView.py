@@ -259,6 +259,11 @@ def update_annotation(set_progress, i, docList, USER):
     # Pull the data from the API
     fullAnnotationDoc = gc.get(f"annotation/{doc_with_no_element['_id']}")
 
+    itemInfo = gc.get(f'item/{doc_with_no_element["itemId"]}')
+    imageName = itemInfo["name"]
+
+    fullAnnotationDoc["imageName"] = imageName
+
     # Update the document in the database
     status = collection.update_one(
         {"_id": doc_with_no_element["_id"], "userName": USER},

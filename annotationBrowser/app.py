@@ -2,7 +2,8 @@ from dash import Input, Output, State, html
 import dash_bootstrap_components as dbc
 from annotationBrowser_panel import annotation_panel
 import dash_mantine_components as dmc
-from masks import masks_export
+
+# from masks import masks_export
 from annotationTableView import annotationTable_layout
 from app_config import app
 from tissueSegModel_panel import tissueSegModel_panel
@@ -12,13 +13,13 @@ tab_layout = dmc.Tabs(
         dmc.TabsList(
             [
                 dmc.Tab("Annotation Panel", value="annotationPanel"),
-                dmc.Tab("Exported Masks", value="masksExport"),
+                # dmc.Tab("Exported Masks", value="masksExport"),
                 dmc.Tab("Annotation Table", value="annotationTable"),
                 dmc.Tab("Run Tissue Seg", value="tissueSegModel"),
             ]
         ),
         dmc.TabsPanel(annotation_panel, value="annotationPanel"),
-        dmc.TabsPanel(masks_export, value="masksExport"),
+        # dmc.TabsPanel(masks_export, value="masksExport"),
         dmc.TabsPanel(annotationTable_layout, value="annotationTable"),
         dmc.TabsPanel(tissueSegModel_panel, value="tissueSegModel"),
     ],

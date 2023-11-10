@@ -2,7 +2,16 @@ import dash_bootstrap_components as dbc
 from settings import DSA_BASE_URL, gc
 import dash, json
 from pprint import pprint
-from dash import html, Input, Output, State, dcc, callback_context, callback, ALL
+from dash import (
+    html,
+    Input,
+    Output,
+    State,
+    dcc,
+    callback_context,
+    callback,
+    ALL,
+)
 import plotly.graph_objects as go
 
 # from ...utils.api import get_item_rois, pull_thumbnail_array, get_largeImageInfo
@@ -12,8 +21,8 @@ import dash.dcc as dcc
 import pickle
 from settings import dbConn, USER
 import dbHelpers as dbh
-
 from joblib import Memory
+
 
 memory = Memory(".npCacheDir", verbose=0)
 
@@ -75,6 +84,14 @@ def getThumbnailUrl(imageId, encoding="PNG", height=128):
 cardTemplates = {}
 
 
+def generate_card_layout(index, cardType):
+    return dcc.Loading(
+        id={"type": "loading-card", "index": index},
+        children=html.Div(id={"type": "card-content", "index": index}),
+        type="default",
+    )
+
+
 def generate_cards(subset, selected_size, cardType="image"):
     cards_and_tooltips = []
 
@@ -104,7 +121,6 @@ def generate_cards(subset, selected_size, cardType="image"):
                             ),
                         ],
                         className="mb-6",
-                        # style={"width": "192px", "height": "192px", "margin": "2px"},
                         id=card_id,  # add id to each card
                     ),
                     md=column_width,  # Adjusted column width
@@ -139,10 +155,10 @@ def generate_cards(subset, selected_size, cardType="image"):
                     md=column_width,  # Adjusted column width
                 )
             )
-
+        ### In some contexts, the item actually has no name... need to modify the mongo database perhaps to get this?
         cards_and_tooltips.append(
             dbc.Tooltip(
-                f"Row: {index//3 + 1}, Column: {(index%3) + 1}",
+                f"Row: {index//3 + 1}, Column: {(index%3) + 1} {item.get('name','ElNombre')}",
                 target=card_id,
             )
         )
@@ -181,7 +197,11 @@ def generateDataViewLayout(itemSet, type="imageList"):
         dbc.Row(
             [dbc.Col(pagination, width=3), dbc.Col(size_selector, width=3)]
         ),  # Put these controls in a Div at the top
-        html.Div(id="cards-container"),  # This Div will be populated by the callback
+        dcc.Loading(
+            id="dataview-loading",
+            children=[html.Div(id="cards-container")],
+            type="default",
+        ),  # This Div will be populated by the callback
     ]
 
 
