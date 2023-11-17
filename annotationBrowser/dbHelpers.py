@@ -5,7 +5,7 @@ import numpy as np
 from joblib import Memory
 from time import time
 from functools import wraps
-from settings import USER
+from settings import USER, gc
 from dash import html
 import dash_ag_grid as dag
 import pandas as pd
@@ -61,6 +61,39 @@ def getAnnotationElementCount(annotationName):
 
     results = list(dbConn["annotationData"].aggregate(pipeline))
     return results
+
+
+def insertItemData(itemList, userName, debug=False):
+    ## This will insert item data into mongo for when I am in annotaition Mode specifically.
+    itemList = [dict(item, **{"userName": userName}) for item in itemList]
+    operations = []
+    for i in itemList:
+        operations.append(
+            pymongo.UpdateOne({"_id": i["_id"]}, {"$set": i}, upsert=True)
+        )
+
+    ### NEED TO REDO THIS AND REMAP THE _id to annotationId or itemId... and keep the username field
+
+    for chunk in chunks(operations, 500):
+        result = dbConn["itemData"].bulk_write(chunk)
+        if debug:
+            pprint(result.bulk_api_result)
+    return
+
+
+def getItemName(itemId, userName):
+    ### I want to either store or get itemData from Mongo or the DSA
+
+    conn = dbConn["itemData"]
+    itemData = conn.find_one({"_id": itemId, "userName": userName})
+    if not itemData:
+        itemData = gc.get(f"item/{itemId}")
+        if itemData:
+            insertItemData([itemData], userName)
+
+            return itemData["name"]
+
+    return itemData["name"]
 
 
 def insertAnnotationData(annotationItems, userName, debug=False):

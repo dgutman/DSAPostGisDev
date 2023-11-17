@@ -7,7 +7,7 @@ from functools import wraps
 from time import time
 from dbHelpers import timing, insertAnnotationData
 
-annotationDocs = ["tissue", "gray", "ManualGrayMatter"]
+annotationDocs = ["tissue", "ManualGrayMatter"]
 
 annotation_panel = html.Div(
     [
@@ -74,7 +74,7 @@ def pullAnnotationStats(n_clicks):
 
     if totalDocCount == 0:
         print("No Elements stored yet!!")
-
+        ## This just primes the system...
         docName = "tissue"
         docSet = gc.get(f"annotation?name={docName}&limit=0")
         insertAnnotationData(docSet, USER)
@@ -117,8 +117,7 @@ def lookupImageAnnotationsByName(annotationName, limit=0, refreshDataBase=False)
     collection = dbConn["annotationData"]
     docCount = collection.count_documents({"annotation.name": "annotationName"})
     print(f"Found {docCount} docs with {annotationName}")
-    if refreshDataBase:
-        print(gc.token)
+    if refreshDataBase or docCount == 0:
         annotationDocs = gc.get(f"annotation?text={annotationName}&limit={limit}")
 
         if annotationDocs:

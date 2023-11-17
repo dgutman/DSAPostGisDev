@@ -25,7 +25,7 @@ tab_layout = dmc.Tabs(
     ],
     color="blue",
     orientation="horizontal",
-    value="tissueSegModel",
+    value="annotationPanel",
 )
 
 # Dash app setup
@@ -33,6 +33,8 @@ app.layout = html.Div(tab_layout)
 ## APP INSTANTIATION OCCURS ON THE APP_CONFIG FILE AS A SINGLETON
 
 ## WILL FOR NOW EMBED ALL THE GIRDER_CLIENT LOGIN AND LOGIC IN HERE... SINCE THIS WILL BE SEPARATE FROM THE PANEL ITSELF IN OUR FINAL APP
+
+server = app.server
 
 if __name__ == "__main__":
     app.run_server(debug=True, host="0.0.0.0")
