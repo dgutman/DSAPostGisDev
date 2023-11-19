@@ -14,13 +14,11 @@ from skimage import io
 
 
 from components.imageReg import imageReg_panel
-
-# from components.imageBlobViz_panel import mainImageViz_layout
+from components.blobTable_layout import blobTable_layout
+from components.imageBlobViz_panel import mainImageViz_layout
 
 
 app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
-
-sampleImage = "2xtau, CSF1, 15DIV_GREEN.tif"
 
 
 tab_layout = dmc.Tabs(
@@ -32,7 +30,7 @@ tab_layout = dmc.Tabs(
                 dmc.Tab("ViewImageStack", value="imageViz"),
             ]
         ),
-        dmc.TabsPanel(html.Div("blobo"), value="blobTable"),
+        dmc.TabsPanel(blobTable_layout, value="blobTable"),
         dmc.TabsPanel(html.Div("imageTab"), value="imageViz"),
         dmc.TabsPanel(html.Div(imageReg_panel), "registrationPanel"),
     ],

@@ -8,7 +8,7 @@ from dataView_component import getImageThumb_as_NP, plotImageAnnotations
 from models import uNetResNet
 import torch
 import cv2 as cv
-import dash_core_components as dcc
+from dash import dcc
 import plotly.graph_objs as go
 import numpy as np
 from models import val_transforms
@@ -30,7 +30,7 @@ col_defs = [
     {"field": "meta_npSchema_stainID"},
 ]
 
-print(df.columns)
+# print(df.columns)
 tissueSegModel_panel = html.Div(
     [
         generate_generic_DataTable(df, "sampleImageList_table", col_defs),
@@ -45,7 +45,7 @@ tissueSegModel_panel = html.Div(
     ]
 )
 
-model = uNetResNet(in_channels=3, out_channels=1, pretrained=True)
+model = uNetResNet(in_channels=3, out_channels=1)  # , pretrained=True)
 model.load_state_dict(torch.load("best.pt", map_location=torch.device("cpu")))
 model.eval()
 
