@@ -34,7 +34,6 @@ dataStore_layout = html.Div(
 
 def resampleArrayImage(image_as_np, sampleFactor=4):
     ## Given a numpy array that is an image, downSample by a given factor
-    print(image_as_np.shape)
     # Assuming 'image_np' is your numpy array
     image_pil = Image.fromarray(image_as_np)
 
@@ -235,9 +234,6 @@ def sync_zoom(relayoutData, regImage_data, fixedImage_data):
     if not ctx.triggered:
         raise dash.exceptions.PreventUpdate
 
-    # for tid in ctx.triggered:
-    #     print(tid["prop_id"])
-
     ### Get the data for the registered image...
     encoded_registeredImage = regImage_data["array"]
     if encoded_registeredImage:
@@ -267,8 +263,9 @@ def sync_zoom(relayoutData, regImage_data, fixedImage_data):
             # # Update the xaxis and yaxis range of the other figures
             registered_fig["layout"]["xaxis"]["range"] = x_range
             registered_fig["layout"]["yaxis"]["range"] = y_range
-            # diff_fig["layout"]["xaxis"]["range"] = x_range
-            # diff_fig["layout"]["yaxis"]["range"] = y_range
+
+            difference_fig["layout"]["xaxis"]["range"] = x_range
+            difference_fig["layout"]["yaxis"]["range"] = y_range
 
         return registered_fig, difference_fig
     raise dash.exceptions.PreventUpdate
@@ -313,90 +310,6 @@ def generateDiffImage_figure(np_fixedImage, np_registeredImage):
     difference_fig.update_layout(autosize=True)
     difference_fig.update_layout(margin=dict(l=0, r=4, t=0, b=0), showlegend=False)
     return difference_fig
-
-
-# def generateDiffImage_figure(np_fixedImage, np_registeredImage):
-#     ### This expects two numpy arrays, no normalization or anything, just the original
-
-#     # Convert to a signed data type
-#     fixed_image_signed = np_fixedImage.astype(np.int16)
-#     registered_image_signed = np_registeredImage.astype(np.int16)
-
-#     # Assuming image_a and image_b are your images
-#     # Convert them to int16 to handle negative values after subtraction
-
-#     # Subtract the images
-#     difference = fixed_image_signed - registered_image_signed
-
-#     # Create an empty image with 3 channels (RGB)
-#     new_image = np.zeros_like(fixed_image_signed, dtype=np.uint8)
-
-#     # Process positive differences (red channel)
-#     positive_diff = np.clip(difference, 0, None)  # Keep only positive values
-#     # Scale to 0-255
-#     positive_diff_scaled = (255 * (positive_diff / positive_diff.max())).astype(
-#         np.uint8
-#     )
-#     positive_diff_scaled = positive_diff_scaled[
-#         :, :, 0
-#     ]  # Assuming the first channel represents the scaled data
-
-#     new_image[:, :, 0] = positive_diff_scaled  # Assign to red channel
-
-#     # Process negative differences (blue channel)
-#     negative_diff = np.clip(
-#         -difference, 0, None
-#     )  # Keep only negative values (make positive)
-#     # Scale to 0-255
-#     negative_diff_scaled = (255 * (negative_diff / negative_diff.max())).astype(
-#         np.uint8
-#     )
-#     negative_diff_scaled = negative_diff_scaled[
-#         :, :, 0
-#     ]  # Assuming the first channel represents the scaled data
-
-#     new_image[:, :, 2] = negative_diff_scaled  # Assign to blue channel
-
-#     print(positive_diff.max(), negative_diff.max())
-
-#     difference_fig = px.imshow(new_image)
-#     difference_fig.update_layout(autosize=True)
-#     difference_fig.update_layout(margin=dict(l=0, r=4, t=0, b=0), showlegend=False)
-#     return difference_fig
-
-
-# 'new_image' now contains the result
-
-# # Subtract the images
-# difference_image = registered_image_signed - fixed_image_signed
-
-
-# # Create an empty color image (3 channels for RGB)
-# diff_min = np.min(difference_image)
-# diff_max = np.max(difference_image)
-
-# # print(diff_min, diff_max)
-# if diff_max - diff_min != 0:
-#     scaled_difference = 255 * (difference_image - diff_min) / (diff_max - diff_min)
-#     scaled_difference = scaled_difference.astype(np.uint8)
-# else:
-#     # Handle the case where all values in difference_image are the same
-#     scaled_difference = np.zeros_like(difference_image, dtype=np.uint8)
-
-# # Create a visualization array with the correct shape
-# visualization = np.zeros(
-#     (difference_image.shape[0], difference_image.shape[1], 3), dtype=np.uint8
-# )
-
-# # Update red channel for positive differences
-# visualization[:, :, 0] = np.where(
-#     difference_image[:, :, 0] > 0, scaled_difference[:, :, 0], 0
-# )
-
-# # Update blue channel for negative differences
-# visualization[:, :, 2] = np.where(
-#     difference_image[:, :, 0] < 0, scaled_difference[:, :, 0], 0
-# )
 
 
 # @memory.cache
@@ -509,8 +422,6 @@ def generateImageHistogram(np_imageData, imageLabel=None):
 )
 def generateFixedImageHistogram(fixedImage_data, genHistogram):
     if genHistogram:
-        print("Trying to generate fixed image histogram...")
-
         # Assuming 'data' is retrieved from dcc.Store
         encoded = fixedImage_data["array"]
 
@@ -528,7 +439,7 @@ def generateFixedImageHistogram(fixedImage_data, genHistogram):
 )
 def generateMovingImageHistogram(movingImage_data, genHistogram):
     if genHistogram:
-        print("Trying to generate moving image histogram...")
+        # print("Trying to generate moving image histogram...")
 
         # Assuming 'data' is retrieved from dcc.Store
         encoded = movingImage_data["array"]
