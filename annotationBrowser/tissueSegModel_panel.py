@@ -29,6 +29,14 @@ col_defs = [
     {"field": "meta_npSchema_caseID"},
     {"field": "meta_npSchema_stainID"},
 ]
+df = pd.json_normalize(itemList, sep="_")
+col_defs = [
+    {"field": "_id"},
+    {"field": "name"},
+    {"field": "meta_npSchema_regionName"},
+    {"field": "meta_npSchema_caseID"},
+    {"field": "meta_npSchema_stainID"},
+]
 
 # print(df.columns)
 tissueSegModel_panel = html.Div(
@@ -91,6 +99,7 @@ def selected(selected):
         #        image_as_np = getImageThumb_as_NP(selected[0]["_id"])
 
         image_fig = plotImageAnnotations(imageId)
+        image_copy = getImageThumb_as_NP(imageId)
         image_copy = getImageThumb_as_NP(imageId)
         image_with_contours = image_copy.copy()
         orig_shape = (image_copy.shape[1], image_copy.shape[0])
