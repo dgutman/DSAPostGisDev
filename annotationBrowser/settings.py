@@ -8,11 +8,11 @@ load_dotenv()
 
 DSAKEY = os.getenv("DSAKEY")
 DSA_BASE_URL = "https://megabrain.neurology.emory.edu/api/v1"
-# print(DSAKEY, "is dsa key")
+print(DSAKEY, "is dsa key")
 gc = girder_client.GirderClient(apiUrl=DSA_BASE_URL)
 if DSAKEY:
     gc.authenticate(apiKey=DSAKEY)
-
+    print("Authenticated to the DSA..")
 
 USER = "admin"
 
@@ -51,3 +51,6 @@ dbConn["annotationData"].create_index("itemId")
 
 
 dbConn["annotationData"].create_index([("itemId", 1), ("annotation.name", 1)])
+
+
+dbConn["imageTileInfo"].create_index("imageId")

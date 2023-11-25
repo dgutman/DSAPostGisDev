@@ -16,7 +16,7 @@ from skimage import io
 from components.imageReg import imageReg_panel
 from components.blobTable_layout import blobTable_layout
 from components.imageBlobViz_panel import mainImageViz_layout
-
+from components.viewDendraFolder import experimentView_panel
 
 app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
@@ -28,11 +28,13 @@ tab_layout = dmc.Tabs(
                 dmc.Tab("Registration Panel", value="registrationPanel"),
                 dmc.Tab("Blob Table", value="blobTable"),
                 dmc.Tab("ViewImageStack", value="imageViz"),
+                dmc.Tab("ViewDendraExperiment", value="viewExperiment"),
             ]
         ),
         dmc.TabsPanel(blobTable_layout, value="blobTable"),
-        dmc.TabsPanel(html.Div("imageTab"), value="imageViz"),
-        dmc.TabsPanel(html.Div(imageReg_panel), "registrationPanel"),
+        dmc.TabsPanel(mainImageViz_layout, value="imageViz"),
+        dmc.TabsPanel(imageReg_panel, "registrationPanel"),
+        dmc.TabsPanel(experimentView_panel, "viewExperiment"),
     ],
     color="blue",
     orientation="horizontal",

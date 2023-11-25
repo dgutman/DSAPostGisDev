@@ -1,11 +1,12 @@
 from dash import html, callback, Input, Output, dcc, dash_table
 import plotly.graph_objs as go
-from skimage import io
+from skimage import io, measure, draw
 import plotly.express as px
 from joblib import Memory
 from skimage.color import rgb2gray
 from skimage.feature import blob_log
 import dash_bootstrap_components as dbc
+import numpy as np
 
 ### Create local cacheing decorator
 memory = Memory(".npCacheDir", verbose=0)
@@ -36,8 +37,28 @@ def update_blob_detection(size_value, thresh):
     blobs = blob_log(
         img_gray, min_sigma=1, max_sigma=size_value, num_sigma=5, threshold=thresh
     )
+
+    labeled_image = np.zeros_like(img_gray, dtype=np.uint8)
+
+    label = 1
+    for blob in blobs:
+        y, x, r = blob
+        rr, cc = draw.disk((y, x), r, shape=img_gray.shape)
+        labeled_image[rr, cc] = label
+        label += 1
+
+    # Compute the mean intensity for each blob
+    regions = measure.regionprops(labeled_image, intensity_image=img_gray)
+    print(regions[1])
     blob_data_for_table = [
-        {"x": blob[0], "y": blob[1], "size": blob[2]} for blob in blobs
+        {
+            "x": region.centroid[1],
+            "y": region.centroid[0],
+            "size": region.equivalent_diameter,
+            "mean_intensity": region.mean_intensity,
+            "blobId": "",
+        }
+        for region in regions
     ]
 
     # Return both the raw blob data and the formatted data for the table
@@ -162,7 +183,7 @@ def update_ROI_table(data):
 ### Bind elements based on when the ROI detection generates output
 
 
-imageViz_layout = dbc.Row(
+mainImageViz_layout = dbc.Row(
     [
         dbc.Col(
             dcc.Graph(

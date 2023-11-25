@@ -115,7 +115,7 @@ def getAnnotationData_from_mongo(annotationName, USER, debug=False):
 def lookupImageAnnotationsByName(annotationName, limit=0, refreshDataBase=False):
     ## See if any documents exist for the
     collection = dbConn["annotationData"]
-    docCount = collection.count_documents({"annotation.name": "annotationName"})
+    docCount = collection.count_documents({"annotation.name": annotationName})
     print(f"Found {docCount} docs with {annotationName}")
     if refreshDataBase or docCount == 0:
         annotationDocs = gc.get(f"annotation?text={annotationName}&limit={limit}")

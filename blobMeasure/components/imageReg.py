@@ -225,9 +225,10 @@ imageReg_panel = dbc.Container(
     Output("diffImage", "figure"),
     Input("fixedImage", "relayoutData"),
     Input("registeredImage_store", "data"),
+    Input("invertResigteredColors-switch", "value"),
     State("fixedImage_store", "data"),
 )
-def sync_zoom(relayoutData, regImage_data, fixedImage_data):
+def sync_zoom(relayoutData, regImage_data, invertRegColors, fixedImage_data):
     ctx = dash.callback_context
 
     ## TO DEBUG.. APPEARS MORE THAN ONE CALLBACK CAN UPDATE THe CALL BACK
@@ -239,6 +240,15 @@ def sync_zoom(relayoutData, regImage_data, fixedImage_data):
     if encoded_registeredImage:
         buffer = io.BytesIO(base64.b64decode(encoded_registeredImage))
         registered_image_np = np.load(buffer)
+
+        if invertRegColors:
+            ## Invert colors
+            image_color_flipped = registered_image_np.copy()
+            image_color_flipped[:, :, 1], image_color_flipped[:, :, 2] = (
+                registered_image_np[:, :, 2],
+                registered_image_np[:, :, 1],
+            )
+            registered_image_np = image_color_flipped
 
         # registered_image_np = registered_image_np[registered_image_np < thresh]
         registered_fig = px.imshow(registered_image_np)
@@ -525,31 +535,6 @@ def renderMovingImage(movingImage_data):
 
 #         return registered_fig
 #     return None
-
-# @app.callback(
-#     Output('registeredImage', 'figure'),
-#     # Add other Inputs and States required by the logic that updates this figure
-#     [Input('fixedImage', 'relayoutData'),
-#      Input('some-other-input', 'value')],
-#     [State('registeredImage', 'figure'),
-#      State('some-other-state', 'value')]
-# )
-# def update_registered_image(relayoutData, other_input, reg_fig, other_state):
-#     ctx = dash.callback_context
-
-#     if not ctx.triggered:
-#         raise dash.exceptions.PreventUpdate
-
-#     trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-
-#     if trigger_id == 'fixedImage':
-#         # Logic to handle zoom synchronization
-#         # ...
-#     elif trigger_id == 'some-other-input':
-#         # Other logic to update registeredImage.figure
-#         # ...
-
-#     return reg_fig
 
 
 @callback(
