@@ -8,8 +8,8 @@ import dash_bootstrap_components as dbc
 import base64, io
 import plotly.graph_objects as go
 import cv2
-import numpy as np
 from joblib import Memory
+
 
 memory = Memory(".npCacheDir", verbose=0)
 
@@ -28,6 +28,36 @@ dataStore_layout = html.Div(
         dcc.Store(id="registeredImage_store", data={"array": ""}),
         dcc.Store(id="diffImage_store", data={"array": ""}),
         dcc.Store(id="xfm_store", data={"array": ""}),
+    ]
+)
+
+
+homography_descr_markdown = """
+```
+H = | h00 h01 h02 |
+    | h10 h11 h12 |
+    | h20 h21 h22 |
+```
+
+
+**Mapping:**
+- Maps a point (x, y) from the source image to a point (x', y') in the destination image using homogeneous coordinates.
+- (x', y', w') = H * (x, y, 1)
+- Cartesian coordinates: x' = x'/w', y' = y'/w'
+
+**Matrix Elements:**
+- h00, h01, h10, h11: Control scaling, rotation, and shearing.
+- h02, h12: Represent translations in x and y directions.
+- h20, h21, h22: Handle perspective transformations. h22 is usually 1.
+
+
+"""
+
+
+homography_info = dbc.Card(
+    [
+        dbc.CardHeader("Homography Matrix Explanation"),
+        dbc.CardBody([dcc.Markdown(homography_descr_markdown)]),
     ]
 )
 
@@ -153,6 +183,12 @@ imageReg_panel = dbc.Container(
         ),
         dbc.Row(
             [
+                dbc.Col(dbc.Card(id="currentXfm"), width=8),
+                dbc.Col(homography_info, width=4),
+            ]
+        ),
+        dbc.Row(
+            [
                 dbc.Col(
                     dbc.Card(
                         [
@@ -218,6 +254,43 @@ imageReg_panel = dbc.Container(
     ],
 )
 
+import json
+
+
+def format_matrix(matrix):
+    return "\n".join(["\t".join([f"{item:.4f}" for item in row]) for row in matrix])
+
+
+@callback(Output("currentXfm", "children"), Input("xfm_store", "data"))
+def displayCurrentXfmCards(currentXfmdata):
+    formatted_xfm = format_matrix(currentXfmdata["xfm"])
+    formatted_inv_xfm = format_matrix(currentXfmdata["inv_xfm"])
+
+    xfm_layout = dbc.Row(
+        [
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Forward Transformation Matrix"),
+                        dbc.CardBody([dcc.Markdown(f"```\n{formatted_xfm}\n```")]),
+                    ]
+                ),
+                width=4,
+            ),
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Inverse Transformation Matrix"),
+                        dbc.CardBody([dcc.Markdown(f"```\n{formatted_inv_xfm}\n```")]),
+                    ]
+                ),
+                width=4,
+            ),
+        ]
+    )
+
+    return xfm_layout
+
 
 ### Sycnhronize the ZOOM between the 1st, 3rd and 4th windows, maybe also put a box on the second image
 @callback(
@@ -279,11 +352,6 @@ def sync_zoom(relayoutData, regImage_data, invertRegColors, fixedImage_data):
 
         return registered_fig, difference_fig
     raise dash.exceptions.PreventUpdate
-
-
-import cv2
-import numpy as np
-import plotly.express as px
 
 
 def generateDiffImage_figure(np_fixedImage, np_registeredImage):
@@ -539,7 +607,7 @@ def renderMovingImage(movingImage_data):
 
 @callback(
     Output("registeredImage_store", "data"),
-    # Output("diffImage_hist", "figure"),
+    Output("xfm_store", "data"),
     Input("runImageReg", "n_clicks"),
 )
 def load_fixedMoving_image(init_panel_clicked):
@@ -623,4 +691,4 @@ def load_fixedMoving_image(init_panel_clicked):
 
     # diff_hist = generateImageHistogram(visualization, "Diff Image")
 
-    return {"array": encoded}  # , diff_hist
+    return {"array": encoded}, xfm_data

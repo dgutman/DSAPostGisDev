@@ -1,16 +1,18 @@
 from dash import html, dash_table
 import dash_bootstrap_components as dbc
+import dash_ag_grid as dag
 
 
 results_table = dbc.Col(
-    dash_table.DataTable(
+    dag.AgGrid(
         id="output-table",
-        columns=[
-            {"name": i, "id": i} for i in ["x", "y", "size", "mean_intensity", "blobId"]
+        columnDefs=[
+            {"field": i, "sortable": True}
+            for i in ["x", "y", "size", "mean_intensity", "blobId"]
         ],
-        data=[],
+        rowData=[],
     ),
-    width=12,
+    width=6,
 )
 
 

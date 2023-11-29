@@ -167,7 +167,7 @@ def display_hover_data(hoverData):
 
 @callback(
     Output(
-        "output-table", "data"
+        "output-table", "rowData"
     ),  # ID and property of the table where results will be shown
     Output("roiCount_info", "children"),
     Input("imageROI_data", "data"),  # Add other inputs as necessary
