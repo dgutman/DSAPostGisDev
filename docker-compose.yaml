@@ -33,52 +33,53 @@ services:
       options:
         max-size: "10M"
         max-file: "5"
-  redis:
-    image: redis:7
-    ports:
-      - 6379:6379
-  celery_worker:
-    build:
-      context: .
-      dockerfile: ./annotationBrowser/Dockerfile
-    # image: celery_worker
-    command: /start-celeryworker
-    volumes:
-      - ./annotationBrowser:/app
-    env_file:
-      - .env
-    environment:
-      - FLASK_APP=app
-    depends_on:
-      - redis
-  celery_beat:
-    build:
-      context: .
-      dockerfile: ./dockerServices/Dockerfile
-    # image: flask_celery_example_celery_beat
-    command: /start-celerybeat
-    volumes:
-      - ./dockerServices/:/app
-    env_file:
-      - .env
-    environment:
-      - FLASK_APP=app
-    depends_on:
-      - redis
-  flower:
-    build:
-      context: .
-      dockerfile: ./dockerServices/Dockerfile
-    # image: flask_celery_example_celery_flower
-    command: /start-flower
-    volumes:
-      - ./dockerServices/:/app
-    env_file:
-      - .env
-    ports:
-      - 5557:5555
-    depends_on:
-      - redis
+      #  redis:
+      #    image: redis:7
+      #    ports:
+      #      - 6379:6379
+      #  celery_worker:
+      #    build:
+      #      context: .
+      #      dockerfile: ./annotationBrowser/Dockerfile
+      #    # image: celery_worker
+      #    command: /start-celeryworker
+      #    volumes:
+      #      - ./annotationBrowser:/app
+      #    env_file:
+      #      - .env
+      #    environment:
+      #      - FLASK_APP=app
+      #    depends_on:
+      #      - redis
+      #  celery_beat:
+      #    build:
+      #      context: .
+      #      dockerfile: ./dockerServices/Dockerfile
+      #    # image: flask_celery_example_celery_beat
+      #    command: /start-celerybeat
+      #    volumes:
+      #      - ./dockerServices/:/app
+      #    env_file:
+
+      #      - .env
+      #    environment:
+      #      - FLASK_APP=app
+      #    depends_on:
+      #      - redis
+      # flower:
+      #   build:
+      #     context: .
+      #     dockerfile: ./dockerServices/Dockerfile
+      #   # image: flask_celery_example_celery_flower
+      #   command: /start-flower
+      #   volumes:
+      #     - ./dockerServices/:/app
+      #   env_file:
+      #     - .env
+      #   ports:
+      #     - 5557:5555
+      #   depends_on:
+      #     - redis
       # - db
       # - db
       #  https://medium.com/@wilde.consult/fastapi-celery-flower-docker-async-example-part6-3317181c9445
