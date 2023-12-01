@@ -12,22 +12,22 @@ print(DSAKEY, "is dsa key")
 gc = girder_client.GirderClient(apiUrl=DSA_BASE_URL)
 if DSAKEY:
     gc.authenticate(apiKey=DSAKEY)
-
+    print("Authenticated to the DSA..")
 
 USER = "admin"
 
 ## MONGO CONNECTION INFORMATION
 
 ## Determine if I can connect to mongo and redis
+## NOT USING REDIS ANYMORE... WILL MAYBE REINTEGRATE LATER
+# try:
+#     redis_host = socket.gethostbyname("redis")
+#     # print(redis_host)
+#     REDIS_URL = "redis://redis:6379"
 
-try:
-    redis_host = socket.gethostbyname("redis")
-    # print(redis_host)
-    REDIS_URL = "redis://redis:6379"
-
-except:
-    print("Host lookup failed for REDIS")
-    REDIS_URL = "redis://localhost:6379"
+# except:
+#     print("Host lookup failed for REDIS")
+#     REDIS_URL = "redis://localhost:6379"
 
 
 MONGO_URI = "localhost:37017"
@@ -51,3 +51,9 @@ dbConn["annotationData"].create_index("itemId")
 
 
 dbConn["annotationData"].create_index([("itemId", 1), ("annotation.name", 1)])
+
+
+dbConn["imageTileInfo"].create_index("imageId")
+
+
+imageReg_dbConn = mongoConn["registationDB"]

@@ -1,24 +1,15 @@
 import dash_bootstrap_components as dbc
 from settings import DSA_BASE_URL, gc
-import dash, json
+import dash, json, pickle
 from pprint import pprint
-from dash import (
-    html,
-    Input,
-    Output,
-    State,
-    dcc,
-    callback_context,
-    callback,
-    ALL,
-)
+from dash import html, Input, Output, State, dcc, callback_context, callback, ALL, MATCH
 import plotly.graph_objects as go
 
 # from ...utils.api import get_item_rois, pull_thumbnail_array, get_largeImageInfo
 import numpy as np
 import plotly.express as px
 import dash.dcc as dcc
-import pickle
+
 from settings import dbConn, USER
 import dbHelpers as dbh
 from joblib import Memory
@@ -66,7 +57,6 @@ def getImageThumb_as_NP(imageId, imageWidth=512):
         )
 
         ## Need to have or cache the baseImage size as well... another feature to add
-
         baseImage_as_np = pickle.loads(pickledItem.content)
     except:
         return None
@@ -81,87 +71,116 @@ def getThumbnailUrl(imageId, encoding="PNG", height=128):
     return thumb_url
 
 
-cardTemplates = {}
+@callback(
+    Output({"type": "card-content", "index": MATCH}, "children"),
+    Input({"type": "loading-card", "index": MATCH}, "children"),
+    State("filteredItem_store", "data"),
+    State("size-selector", "value"),
+)
+def update_card(index, subset, selected_size, cardType="annotation"):
+    # Logic to update the individual card's content
+    # This could call a function to generate the card's content
+    # based on the index and any other relevant data
+    ### Add error checking here
+    item = subset["data"][index["props"]["id"]["index"]]
 
-
-def generate_card_layout(index, cardType):
-    return dcc.Loading(
-        id={"type": "loading-card", "index": index},
-        children=html.Div(id={"type": "card-content", "index": index}),
-        type="default",
+    column_width = 12 // images_per_row[selected_size]
+    return generate_annotation_card_layout(
+        item, f"card-{index}", column_width, selected_size
     )
 
 
-def generate_cards(subset, selected_size, cardType="image"):
-    cards_and_tooltips = []
+def generate_card_layout(index, column_width, itemSet):
+    card_id = {"type": "card-content", "index": index}
+    # print(len(itemSet))
+    try:
+        item = itemSet["data"][index]
+        print(item)
+    except:
+        item = {}
 
-    for index, item in enumerate(subset):
+    return dbc.Col(
+        [
+            dcc.Loading(
+                id={"type": "loading-card", "index": index},
+                children=html.Div(id={"type": "card-content", "index": index}),
+                type="default",
+            ),
+            dbc.Tooltip(f"{index}:{item.get('itemName',None)}", target=card_id),
+        ],
+        md=column_width,
+    )
+
+
+def generate_annotation_card_layout(item, card_id, column_width, selected_size):
+    cardLayout = dbc.Card(
+        [
+            dbc.CardBody(
+                [
+                    plotImageAnnotations(
+                        item.get("itemId", None),
+                        item.get("annotation", {}).get("name", None),
+                    ),
+                    html.H6(
+                        f'{item.get("annotation", {}).get("name", None)} {item.get("itemName", {})}',
+                        className="card-title no-wrap",
+                    ),
+                ],
+                style={
+                    "height": sizes[selected_size]["image_height"],
+                    "width": sizes[selected_size]["image_width"],
+                },
+            ),
+        ],
+        className="mb-6",
+        id=card_id,  # add id to each card
+    )
+    return cardLayout
+
+
+def generate_image_only_layout(item, card_id, column_width, selected_size):
+    cardLayout = dbc.Card(
+        [
+            dbc.CardImg(
+                src=getThumbnailUrl(item["_id"]),
+                top=True,
+                style={
+                    "height": sizes[selected_size]["image_height"],
+                    "width": sizes[selected_size]["image_width"],
+                },
+            ),
+            dbc.CardBody(
+                [
+                    html.H6(
+                        item.get("name", "None"),
+                        className="card-title no-wrap",
+                    ),
+                ]
+            ),
+        ],
+        className="mb-4",
+        style={"width": "192px", "height": "192px", "margin": "2px"},
+        id=card_id,  # add id to each card
+    )
+    return cardLayout
+
+
+def generate_cards(start_idx, end_ix, selected_size, itemSet, cardType="image"):
+    cards_and_tooltips = []
+    item = {}
+    for index in range(start_idx, end_ix):
         card_id = f"card-{index}"
         column_width = 12 // images_per_row[selected_size]
 
         if cardType == "annotationDoc":
-            cards_and_tooltips.append(
-                dbc.Col(
-                    dbc.Card(
-                        [
-                            dbc.CardBody(
-                                [
-                                    plotImageAnnotations(
-                                        item["itemId"], item["annotation"]["name"]
-                                    ),
-                                    html.H6(
-                                        item.get("annotation", None).get("name", None),
-                                        className="card-title no-wrap",
-                                    ),
-                                ],
-                                style={
-                                    "height": sizes[selected_size]["image_height"],
-                                    "width": sizes[selected_size]["image_width"],
-                                },
-                            ),
-                        ],
-                        className="mb-6",
-                        id=card_id,  # add id to each card
-                    ),
-                    md=column_width,  # Adjusted column width
-                )
-            )
+            card_layout = generate_card_layout(index, column_width, itemSet)
+            cards_and_tooltips.append(card_layout)
         else:
-            cards_and_tooltips.append(
-                dbc.Col(
-                    dbc.Card(
-                        [
-                            dbc.CardImg(
-                                src=getThumbnailUrl(item["_id"]),
-                                top=True,
-                                style={
-                                    "height": sizes[selected_size]["image_height"],
-                                    "width": sizes[selected_size]["image_width"],
-                                },
-                            ),
-                            dbc.CardBody(
-                                [
-                                    html.H6(
-                                        item.get("name", "None"),
-                                        className="card-title no-wrap",
-                                    ),
-                                ]
-                            ),
-                        ],
-                        className="mb-4",
-                        style={"width": "192px", "height": "192px", "margin": "2px"},
-                        id=card_id,  # add id to each card
-                    ),
-                    md=column_width,  # Adjusted column width
-                )
-            )
+            item = "needFunction"
+            card_layout = generate_image_only_layout(index, column_width, itemSet)
+            cards_and_tooltips.append(card_layout)
         ### In some contexts, the item actually has no name... need to modify the mongo database perhaps to get this?
-        cards_and_tooltips.append(
-            dbc.Tooltip(
-                f"Row: {index//3 + 1}, Column: {(index%3) + 1} {item.get('name','ElNombre')}",
-                target=card_id,
-            )
-        )
+
     return cards_and_tooltips
 
 
@@ -190,9 +209,7 @@ def generateDataViewLayout(itemSet, type="imageList"):
     active_page = 1
     start_idx = (active_page - 1) * sizes["small"]["page_size"]
     end_idx = start_idx + sizes["small"]["page_size"]
-    # cards_and_tooltips = generate_cards(itemSet[start_idx:end_idx], "small")
 
-    # cards = dbc.Row(cards_and_tooltips, justify="start")
     return [
         dbc.Row(
             [dbc.Col(pagination, width=3), dbc.Col(size_selector, width=3)]
@@ -222,8 +239,10 @@ def update_cards_and_pagination(active_page, selected_size, itemSet):
     end_idx = start_idx + cards_per_page
 
     cards_and_tooltips = generate_cards(
-        itemSet.get("data", [])[start_idx:end_idx],
+        start_idx,
+        end_idx,
         selected_size,
+        itemSet,
         itemSet.get("displayType", None),
     )
     cards = dbc.Row(cards_and_tooltips, justify="start")
@@ -235,11 +254,22 @@ def update_cards_and_pagination(active_page, selected_size, itemSet):
     return max_page, cards
 
 
-@memory.cache
 def getImageInfo(imageId):
     ## This will return the size and other params for the image
-    imageSizeInfo = gc.get(f"item/{imageId}/tiles")  ### I should probably cache this...
-    return imageSizeInfo
+    ## Pull data from mongo...
+    imageTileInfo = dbConn["imageTileInfo"].find_one({"imageId": imageId})
+    if imageTileInfo:
+        return imageTileInfo
+    else:
+        imageSizeInfo = gc.get(
+            f"item/{imageId}/tiles"
+        )  ### I should probably cache this...
+        imageSizeInfo["imageId"] = imageId
+        dbConn["imageTileInfo"].insert_one(imageSizeInfo)
+
+    imageTileInfo = dbConn["imageTileInfo"].find_one({"imageId": imageId})
+
+    return imageTileInfo
 
 
 def getAnnotationShapesForItem(itemId, annotationName):
@@ -254,6 +284,9 @@ def getAnnotationShapesForItem(itemId, annotationName):
         if "elements" not in aa.get("annotation", {}):
             ## Need to get the elements from girder... this takes a long time at scale
             annotElements = gc.get(f"annotation/{aa['_id']}")
+            itemName = dbh.getItemName(aa["itemId"], "admin")
+            annotElements["itemName"] = itemName
+
             if annotElements:
                 ## Update Mongo..
                 dbh.insertAnnotationData([annotElements], USER)
@@ -368,6 +401,3 @@ def plotImageAnnotations(
         style={"width": "100%", "height": "100%"},
         config={"displayModeBar": False},  # this removes the toolbar
     )
-
-    ## May want to eventually add a check that pulls the point data if an item does not have any elements
-    ## This is a future enhancement
