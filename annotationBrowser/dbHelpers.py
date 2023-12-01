@@ -5,7 +5,7 @@ import numpy as np
 from joblib import Memory
 from time import time
 from functools import wraps
-from settings import USER, gc
+from settings import USER, gc, imageReg_dbConn
 from dash import html, dcc
 import dash_ag_grid as dag
 import pandas as pd
@@ -17,8 +17,64 @@ import numpy as np
 import plotly.express as px
 
 from settings import DSA_BASE_URL, gc
+import cv2
 
 memory = Memory(".npCacheDir", verbose=0)
+
+
+# @memory.cache
+def register_images_ver3(fixed_image, moving_image):
+    # print(fixed_image.shape, moving_image.shape)
+
+    # Detect features and compute descriptors.
+    sift = cv2.SIFT_create()
+    keypoints_1, descriptors_1 = sift.detectAndCompute(fixed_image, None)
+    keypoints_2, descriptors_2 = sift.detectAndCompute(moving_image, None)
+
+    # Feature matching
+    matcher = cv2.BFMatcher()
+    matches = matcher.knnMatch(descriptors_1, descriptors_2, k=2)
+
+    # Apply ratio test
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good_matches.append(m)
+
+    # Extract location of good matches
+    points1 = np.float32([keypoints_1[m.queryIdx].pt for m in good_matches]).reshape(
+        -1, 1, 2
+    )
+    points2 = np.float32([keypoints_2[m.trainIdx].pt for m in good_matches]).reshape(
+        -1, 1, 2
+    )
+
+    # Find homography
+    homography, mask = cv2.findHomography(points1, points2, cv2.RANSAC)
+
+    ## NEED TO INVERT THE HOMOGRAPH AS WELL
+    inv_homography = np.linalg.inv(homography)
+
+    return {"xfm": homography, "inv_xfm": inv_homography}
+
+
+### These are functions related to storing and registering images..
+
+## In a future state instead of doing them all at once, I'd pass them to a message queue..
+
+
+def lookupImageXfm(fixedImage_hash, movingImage_hash, regType="default"):
+    ## I may eventually have more than one image Registartion algorithm for now I'll just use default
+    matrixData = imageReg_dbConn["tauExpRegData"].find_one(
+        {"fixedImage_hash": fixedImage_hash, "movingImage_has": movingImage_hash}
+    )
+
+    if matrixData:
+        print(matrixData)
+    else:
+        ## Compute it!! and then save it.. and then return it... this definitely needs to be made into a task
+        pass  # imageReg()
+    return "Found Nada.."
 
 
 def timing(f):
@@ -183,7 +239,7 @@ def getImageInfo(imageId):
     return imageTileInfo
 
 
-@memory.cache
+# @memory.cache
 def getImageThumb_as_NP(imageId, imageWidth=512):
     ## TO DO: Cache this?
     try:
@@ -194,8 +250,6 @@ def getImageThumb_as_NP(imageId, imageWidth=512):
         baseImage_as_np = pickle.loads(pickledItem.content)
     except:
         return None
-
-    # print("Retreived an image..")
     return baseImage_as_np
 
 

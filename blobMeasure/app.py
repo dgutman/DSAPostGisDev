@@ -38,7 +38,7 @@ tab_layout = dmc.Tabs(
     ],
     color="blue",
     orientation="horizontal",
-    value="registrationPanel",
+    value="viewExperiment",
 )
 
 # Dash app setup

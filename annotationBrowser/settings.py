@@ -54,3 +54,6 @@ dbConn["annotationData"].create_index([("itemId", 1), ("annotation.name", 1)])
 
 
 dbConn["imageTileInfo"].create_index("imageId")
+
+
+imageReg_dbConn = mongoConn["registationDB"]
