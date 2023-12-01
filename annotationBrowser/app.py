@@ -7,6 +7,7 @@ import dash_mantine_components as dmc
 from annotationTableView import annotationTable_layout
 from app_config import app
 from tissueSegModel_panel import tissueSegModel_panel
+from yolo import run_yolo
 
 tab_layout = dmc.Tabs(
     [
@@ -16,12 +17,14 @@ tab_layout = dmc.Tabs(
                 # dmc.Tab("Exported Masks", value="masksExport"),
                 dmc.Tab("Annotation Table", value="annotationTable"),
                 dmc.Tab("Run Tissue Seg", value="tissueSegModel"),
+                dmc.Tab("Yolov8 Results", value="yolo"),
             ]
         ),
         dmc.TabsPanel(annotation_panel, value="annotationPanel"),
         # dmc.TabsPanel(masks_export, value="masksExport"),
         dmc.TabsPanel(annotationTable_layout, value="annotationTable"),
         dmc.TabsPanel(tissueSegModel_panel, value="tissueSegModel"),
+        dmc.TabsPanel(run_yolo, value="yolo"),
     ],
     color="blue",
     orientation="horizontal",
