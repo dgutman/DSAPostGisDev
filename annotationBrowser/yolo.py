@@ -94,20 +94,20 @@ run_yolo = html.Div(
 
 
 ##saving the images locally right now, will need to change this
-save_dir = "yolo/images"
+src_dir_images = "yolo/images"
 src_dir_labels = "yolo"
 YOLO_OPTIMUS_MODEL = "yolo/models/best.pt"
 YOLO_INPUT_TILE_DIR = "yolo/tiles/images/"
-IMAGE_SAVE_DIR = "yolo"
+SAVE_DIR = "yolo"
 predictions_folder = "runs/detect/predict"
 
 
 # Check or create directories
 for p in [
     YOLO_INPUT_TILE_DIR,
-    save_dir,
+    src_dir_images,
     src_dir_labels,
-    IMAGE_SAVE_DIR,
+    SAVE_DIR,
     predictions_folder,
 ]:
     if not os.path.isdir(p):
@@ -121,7 +121,7 @@ def parse_args():
         user=None,
         password=None,
         fld_id="650887979a8ab9ec771ba678",
-        save_dir=save_dir,
+        save_dir=src_dir_images ,
         api_url="http://glasslab.neurology.emory.edu:8080/api/v1",
     )
     return args
@@ -131,7 +131,7 @@ def get_images(fld_id):
     print(fld_id)
     items = list(gc.listItem(fld_id))
     for item in tqdm(items):
-        makedirs(save_dir, exist_ok=True)
+        makedirs(src_dir_images , exist_ok=True)
         # Read the metadata to identify the nuclei/DAPI channel.
         channels = item.get("meta", {}).get("Channels", {})
         # Look for nuclei channel.
@@ -164,10 +164,10 @@ def get_images(fld_id):
 
         # Save images.
         img = np.array(Image.open(BytesIO(response.content)))
-        imwrite(join(save_dir, f"{get_filename(item['name'])}.png"), img)
+        imwrite(join(src_dir_images , f"{get_filename(item['name'])}.png"), img)
 
         # Get labels
-    img_fps = sorted([fp for fp in glob.glob(join(save_dir, "*.png"))])
+    img_fps = sorted([fp for fp in glob.glob(join(src_dir_images , "*.png"))])
     if not img_fps:
         print("No PNG files found in the specified directory.")
     else:
@@ -195,11 +195,11 @@ def update_images(n_clicks):
     return "Images and Blobs retrieved and saved."
 
 
-fps = glob.glob(IMAGE_SAVE_DIR + "*.png")
+fps = glob.glob(src_dir_images + "*.png")
 
 
 def get_tiles_and_yolo_dataset():
-    tiles_dir = join(save_dir, "tiles")
+    tiles_dir = join(SAVE_DIR, "tiles")
     tiles_df = tile_roi_with_labels_wrapper(
         fps,
         tiles_dir,
@@ -211,26 +211,26 @@ def get_tiles_and_yolo_dataset():
     )
     updated_fps = sorted(fps)
     train_fps, val_fps = train_test_split(updated_fps, train_size=0.8)
-    val_txt_fp = join(IMAGE_SAVE_DIR, "val.txt")
+    val_txt_fp = join(SAVE_DIR, "val.txt")
 
-    with open(join(IMAGE_SAVE_DIR, "dataset.yaml"), "w") as fh:
+    with open(join(SAVE_DIR, "dataset.yaml"), "w") as fh:
         yaml.safe_dump(
             {
                 "nc": 1,
                 "names": ["nuclei"],
-                "path": IMAGE_SAVE_DIR,
+                "path": SAVE_DIR,
                 "train": "train.txt",
                 "val": "val.txt",
             },
             fh,
         )
 
-    with open(join(IMAGE_SAVE_DIR, "train.txt"), "w") as fh:
+    with open(join(SAVE_DIR, "train.txt"), "w") as fh:
         fh.write(
             "\n".join(tiles_df[tiles_df.roi_fp.isin(train_fps)].fp.tolist()).strip()
         )
 
-    with open(join(IMAGE_SAVE_DIR, "val.txt"), "w") as fh:
+    with open(join(SAVE_DIR, "val.txt"), "w") as fh:
         fh.write("\n".join(tiles_df[tiles_df.roi_fp.isin(val_fps)].fp.tolist()).strip())
 
 
