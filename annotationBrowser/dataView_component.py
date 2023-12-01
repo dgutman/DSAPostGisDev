@@ -95,7 +95,7 @@ def generate_card_layout(index, column_width, itemSet):
     # print(len(itemSet))
     try:
         item = itemSet["data"][index]
-        print(item)
+        # print(item)
     except:
         item = {}
 

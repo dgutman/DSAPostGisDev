@@ -2,6 +2,7 @@ from dash import html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
 import dash
 import girder_client, os
+import dash_mantine_components as dmc
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
@@ -44,6 +45,28 @@ if YoloKEY:
     print("This is the API key:", YoloKEY)
     gc.authenticate(apiKey=YoloKEY)
 
+
+groundTruthEval_panel = dbc.Row([dbc.Col([html.Div("YO YO YO")])])
+
+
+## This is where I will display ground truth results as well as the model results from YOLO Runs
+results_viz_layout = dmc.Tabs(
+    [
+        dmc.TabsList(
+            [
+                dmc.Tab("YoloModelOutputImages", value="yoloResultImages"),
+                dmc.Tab("groundTruthChecker", value="checkTruth"),
+            ]
+        ),
+        dmc.TabsPanel(html.Div(id="image-display"), value="yoloResultImages"),
+        dmc.TabsPanel(groundTruthEval_panel, value="checkTruth"),
+    ],
+    color="blue",
+    orientation="horizontal",
+    value="checkTruth",
+)
+
+
 run_yolo = html.Div(
     [
         dbc.Row(
@@ -80,26 +103,36 @@ run_yolo = html.Div(
                 ),
             ]
         ),
-        dbc.Row(
-            [
-                dbc.Col(
-                    [
-                        html.Div(id="image-display"),
-                    ],
-                ),
-            ]
-        ),
+        dbc.Row([results_viz_layout]),
     ]
 )
 
 
 ##saving the images locally right now, will need to change this
-src_dir_images = "yolo/images"
+src_dir_images = "yolo/images/"
 src_dir_labels = "yolo"
 YOLO_OPTIMUS_MODEL = "yolo/models/best.pt"
 YOLO_INPUT_TILE_DIR = "yolo/tiles/images/"
 SAVE_DIR = "yolo"
-predictions_folder = "runs/detect/predict"
+predictions_folder = "../runs/detect/predict2"
+
+
+def findTruthAndPredictionDataSets(truth_tile_dir, prediction_tile_root):
+    """This will allow us to look at ground truth tiles that have been generated and then see if
+    there are also predictions, this makes certain assumptions about the relationship of the labels, but
+    I believe this has to be consistent for YOLO to work anyway"""
+    groundTruth_tile_set = os.listdir(truth_tile_dir)
+    for gtt in groundTruth_tile_set:
+        ## Now find the correspond ground Truth labels
+        tileRootFile = os.path.basename(gtt).replace(".png", "")
+        gtLabelFile = os.path.join(
+            truth_tile_dir.replace("images", "labels"), tileRootFile + ".txt"
+        )
+        if os.path.isfile(gtLabelFile):
+            print(gtLabelFile)
+
+
+findTruthAndPredictionDataSets(YOLO_INPUT_TILE_DIR, predictions_folder)
 
 
 # Check or create directories
@@ -108,7 +141,6 @@ for p in [
     src_dir_images,
     src_dir_labels,
     SAVE_DIR,
-    predictions_folder,
 ]:
     if not os.path.isdir(p):
         os.makedirs(p, exist_ok=True)
@@ -121,7 +153,7 @@ def parse_args():
         user=None,
         password=None,
         fld_id="650887979a8ab9ec771ba678",
-        save_dir=src_dir_images ,
+        save_dir=src_dir_images,
         api_url="http://glasslab.neurology.emory.edu:8080/api/v1",
     )
     return args
@@ -131,7 +163,7 @@ def get_images(fld_id):
     print(fld_id)
     items = list(gc.listItem(fld_id))
     for item in tqdm(items):
-        makedirs(src_dir_images , exist_ok=True)
+        makedirs(src_dir_images, exist_ok=True)
         # Read the metadata to identify the nuclei/DAPI channel.
         channels = item.get("meta", {}).get("Channels", {})
         # Look for nuclei channel.
@@ -164,10 +196,10 @@ def get_images(fld_id):
 
         # Save images.
         img = np.array(Image.open(BytesIO(response.content)))
-        imwrite(join(src_dir_images , f"{get_filename(item['name'])}.png"), img)
+        imwrite(join(src_dir_images, f"{get_filename(item['name'])}.png"), img)
 
         # Get labels
-    img_fps = sorted([fp for fp in glob.glob(join(src_dir_images , "*.png"))])
+    img_fps = sorted([fp for fp in glob.glob(join(src_dir_images, "*.png"))])
     if not img_fps:
         print("No PNG files found in the specified directory.")
     else:
@@ -196,6 +228,7 @@ def update_images(n_clicks):
 
 
 fps = glob.glob(src_dir_images + "*.png")
+print(fps)
 
 
 def get_tiles_and_yolo_dataset():
@@ -274,17 +307,20 @@ def update_predictions(n_clicks):
 
 def read_images(folder):
     images = []
-    for filename in os.listdir(folder):
-        if filename.endswith(".png"):
-            path = os.path.join(folder, filename)
-            with open(path, "rb") as f:
-                encoded_image = base64.b64encode(f.read()).decode("utf-8")
-                images.append(
-                    {
-                        "name": filename,
-                        "image": f"data:image/png;base64,{encoded_image}",
-                    }
-                )
+    try:
+        for filename in os.listdir(folder):
+            if filename.endswith(".png"):
+                path = os.path.join(folder, filename)
+                with open(path, "rb") as f:
+                    encoded_image = base64.b64encode(f.read()).decode("utf-8")
+                    images.append(
+                        {
+                            "name": filename,
+                            "image": f"data:image/png;base64,{encoded_image}",
+                        }
+                    )
+    except:
+        return []
     return images
 
 
