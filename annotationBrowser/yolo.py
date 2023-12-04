@@ -7,6 +7,8 @@ from tqdm import tqdm
 from PIL import Image
 from io import BytesIO
 from skimage import io
+import plotly.graph_objects as go
+
 from utils import (
     get_tile_metadata,
     imwrite,
@@ -25,12 +27,12 @@ from dotenv import load_dotenv
 from dash import dcc
 from argparse import Namespace
 from dash.exceptions import PreventUpdate
-import dash_core_components as dcc
 import torch
 import cv2 as cv
 from sklearn.model_selection import train_test_split
 import yaml, base64, glob
 from ultralytics import YOLO
+import dash
 
 import plotly.express as px
 
@@ -52,6 +54,7 @@ YOLO_INPUT_TILE_DIR = "yolo/tiles/images/"
 SAVE_DIR = "yolo"
 predictions_folder = "../runs/detect/predict2"
 
+sampleImage = "yolo/tiles/images/7-27-2023 E20-18 IGHM GFAP-x2880y2880.png"
 
 # Check or create directories
 for p in [
@@ -156,11 +159,10 @@ def findTruthAndPredictionDataSets(truth_tile_dir, prediction_tile_root):
                 "gtLabelFile": gtLabelFile,
             }
         )
+    from pprint import pprint
 
+    # pprint(imageTileData)
     return imageTileData
-
-
-imageSetList = findTruthAndPredictionDataSets(YOLO_INPUT_TILE_DIR, predictions_folder)
 
 
 imageNav_controls = dbc.Row(
@@ -168,42 +170,140 @@ imageNav_controls = dbc.Row(
         dbc.Button(
             "CheckYoloFolders", id="checkResultsFolder_button", style={"width": 300}
         ),
-        dcc.Store(id="imageSetList_store", data=imageSetList),
-        dbc.Select(
+        dcc.Store(id="imageSetList_store", data=[]),
+        dcc.Dropdown(
             id="inputImage_select",
-            options=imageSetList,
-            value=imageSetList[0]["label"],
-            style={"width": 300},
+            style={"width": 500},
         ),
     ]
 )
 
 
 @callback(
-    Output("tile_graph", "figure"),
-    Input("inputImage_select", "value"),
+    Output("imageSetList_store", "data"), Input("checkResultsFolder_button", "n_clicks")
+)
+def updateTileImageList(n_clicks):
+    print(n_clicks, "to refresh tile data")
+    ## Updating imageSet List store here
+    imageSetList = findTruthAndPredictionDataSets(
+        YOLO_INPUT_TILE_DIR, predictions_folder
+    )
+    return imageSetList
+
+
+## Link the imageSetList store to the dropdown box and also set the default value
+@callback(
+    Output("inputImage_select", "options"),
+    Output("inputImage_select", "value"),
     Input("imageSetList_store", "data"),
 )
-def updateTileGraph(selectedTile, imageSetList_store):
-    selected_option = next(
-        (item for item in imageSetList_store if item["value"] == selectedTile), None
-    )
+def updateImageSet_selector(imageSet_data):
+    options = [x["label"] for x in imageSet_data]
+    value = options[0]
+    return options, value
 
-    if selected_option:
+
+def add_squares_to_figure(imageFigure, blobs, color="rgba(0, 0, 255, 0.5)"):
+    # img = io.imread(sampleImage)
+    # fig = px.imshow(img)
+    # fig.update_layout(autosize=True)
+    # fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+
+    # print(blobs, "Were the blobs received..")
+    if blobs:
+        for idx, blob in enumerate(blobs):
+            # y, x, r = blob[:3]
+            hovertext = f"Blob ID: {idx}, X: {blob['x0']}, Y: {blob['y0']}"
+
+            imageFigure.add_shape(
+                type="rect",
+                x0=blob["x0"] - blob["w"],
+                y0=blob["y0"] - blob["h"],
+                x1=blob["x0"] + blob["w"],
+                y1=blob["y0"] + blob["h"],
+                line=dict(color=color),
+                fillcolor=color,
+                name=hovertext,
+            )
+
+            ## TO DO.. ADD The centroid instead of the corner?
+            # Add this inside the for loop in the add_squares_to_figure function
+            imageFigure.add_trace(
+                go.Scatter(
+                    x=[blob["x0"]],
+                    y=[blob["y0"]],
+                    mode="markers",
+                    marker=dict(color="rgba(0,0,0,0)"),  # Invisible marker
+                    hoverinfo="text",
+                    hovertext=hovertext,
+                    name=str(idx),  # Unique name for the callback
+                )
+            )
+
+    return imageFigure
+
+
+### Update the image display based on the current displayed image
+@callback(
+    Output("tile_graph", "figure"),
+    Input("inputImage_select", "value"),
+    State("imageSetList_store", "data"),
+)
+def updateMainTileDisplay(selectedTileName, imageSetList):
+    # print(selectedTileName)
+    if imageSetList:
+        selected_option = next(
+            (item for item in imageSetList if item["label"] == selectedTileName), None
+        )
         tileImagePath = selected_option["gtTileImage"]
-        print(tileImagePath, "to be loaded for", selectedTile)
+        # print(tileImagePath, "to be loaded for", selectedTileName)
+
+        gtLabelFile = selected_option["gtLabelFile"]
+
         img = io.imread(tileImagePath)
-        print(img.shape)
         fig = px.imshow(img)
+
+        annotationData = []
+        if gtLabelFile:
+            labelData = readYoloLabelFile(gtLabelFile)
+            fig = add_squares_to_figure(fig, labelData)
+
+        fig.update_layout(autosize=True)
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+
         return fig
 
 
-#     if selected_option is not None:
-#         print(tileName, selected_option)
+#     if selected_option:
+#         img = io.imread(tileImagePath)
+#         print(img.shape)
+#         newFig = px.imshow(img)
+#         newFig.update_layout(autosize=True)
+#         newFig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+
+#         return newFig
 
 
-# fig = px.imshow(img)
+img = io.imread(sampleImage)
+fig = px.imshow(img)
 # return fig
+
+
+def readYoloLabelFile(filename, scaleFactor=1280):
+    with open(filename, "r") as file:
+        lines = file.readlines()
+
+    headers = ["Label", "x0", "y0", "w", "h"]
+    data = []
+
+    for line in lines:
+        values = line.strip().split()
+        values = [
+            float(v) * scaleFactor for v in values
+        ]  ## RESCALE FROM 0 to 1 to 0 to tileWidth
+        data.append(dict(zip(headers, values)))
+
+    return data
 
 
 groundTruthEval_panel = dbc.Container(
@@ -215,42 +315,22 @@ groundTruthEval_panel = dbc.Container(
                     dcc.Graph(
                         ## Seed the graph initially with the base image
                         id="tile_graph",
-                        # figure=None,
-                        # style={
-                        #     "height": "90vh",
-                        #     "width": "100%",
-                        #     "padding": 0,
-                        #     "margin": 0,
-                        # },
+                        figure=fig,
                         responsive=True,
+                        style={
+                            "height": "90vh",
+                            "width": "100%",
+                            "padding": 0,
+                            "margin": 0,
+                        },
                     ),
-                    width=8,
+                    width=6,
                 ),
-                dbc.Col(html.Div("Graphs Go Here"), width=4),
+                dbc.Col(html.Div("Graphs Go Here"), width=6),
             ]
         ),
     ]
 )
-
-# yoloResultViz_controls = dbc.Col(
-#     [
-#         html.H4("Viz Controls"),
-#         dcc.Slider(
-#             id="size-slider",
-#             min=0,
-#             max=100,
-#             step=1,
-#             value=50,
-#             marks={i: str(i) for i in range(0, 101, 10)},
-#         ),
-#
-#         html.Div(id="hover-data-info"),
-#         dcc.Store(id="imageROI_data", data={"raw_blobs": [], "table_blobs": []}),
-#         html.Div(id="roiCount_info"),
-#         # Add more controls as needed
-#     ],
-#     width=3,
-# )
 
 
 ## This is where I will display ground truth results as well as the model results from YOLO Runs
@@ -421,28 +501,28 @@ def read_images(folder):
     return images
 
 
-@callback(Output("image-display", "children"), [Input("image-display", "id")])
-def update_images(_):
-    images = read_images(predictions_folder)
+# @callback(Output("image-display", "children"), [Input("image-display", "id")])
+# def update_images(_):
+#     images = read_images(predictions_folder)
 
-    # Generate cards for each image
-    image_cards = [
-        dbc.Col(
-            dbc.Card(
-                dbc.CardImg(
-                    id=f"image-{i}",
-                    src=image["image"],
-                    top=True,
-                    style={"width": "100%", "height": "auto"},
-                )
-            )
-        )
-        for i, image in enumerate(images)
-    ]
+#     # Generate cards for each image
+#     image_cards = [
+#         dbc.Col(
+#             dbc.Card(
+#                 dbc.CardImg(
+#                     id=f"image-{i}",
+#                     src=image["image"],
+#                     top=True,
+#                     style={"width": "100%", "height": "auto"},
+#                 )
+#             )
+#         )
+#         for i, image in enumerate(images)
+#     ]
 
-    rows = [dbc.Row(image_cards[i : i + 6]) for i in range(0, len(image_cards), 6)]
+#     rows = [dbc.Row(image_cards[i : i + 6]) for i in range(0, len(image_cards), 6)]
 
-    return rows
+#     return rows
 
 
 # from dash import html, callback, Input, Output, dcc, dash_table
@@ -457,6 +537,28 @@ def update_images(_):
 
 # ### Create local cacheing decorator
 # memory = Memory(".npCacheDir", verbose=0)
+
+
+# @callback(
+#     Output("tile_graph", "figure"),
+#     Input("inputImage_select", "value"),
+#     State("imageSetList_store", "data"),
+# )
+# def updateTileGraph(selectedTile, imageSetList_store):
+#     selected_option = next(
+#         (item for item in imageSetList_store if item["value"] == selectedTile), None
+#     )
+
+#     if selected_option:
+#         tileImagePath = selected_option["gtTileImage"]
+#         print(tileImagePath, "to be loaded for", selectedTile)
+#         img = io.imread(tileImagePath)
+#         print(img.shape)
+#         newFig = px.imshow(img)
+#         newFig.update_layout(autosize=True)
+#         newFig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+
+#         return newFig
 
 
 # @callback(
@@ -595,3 +697,29 @@ def update_images(_):
 
 # ## Note a value > 0.1 basically yields no blobs.. just FYI
 # ### Bind elements based on when the ROI detection generates output
+
+# style={
+#     "height": "90vh",
+#     "width": "100%",
+#     "padding": 0,
+#     "margin": 0,
+# },
+# yoloResultViz_controls = dbc.Col(
+#     [
+#         html.H4("Viz Controls"),
+#         dcc.Slider(
+#             id="size-slider",
+#             min=0,
+#             max=100,
+#             step=1,
+#             value=50,
+#             marks={i: str(i) for i in range(0, 101, 10)},
+#         ),
+#
+#         html.Div(id="hover-data-info"),
+#         dcc.Store(id="imageROI_data", data={"raw_blobs": [], "table_blobs": []}),
+#         html.Div(id="roiCount_info"),
+#         # Add more controls as needed
+#     ],
+#     width=3,
+# )
