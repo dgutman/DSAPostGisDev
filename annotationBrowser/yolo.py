@@ -46,8 +46,11 @@ from sklearn.model_selection import train_test_split
 import yaml, base64, glob
 from ultralytics import YOLO
 import dash
-
+from scipy.spatial.distance import dice
+import geopandas as gpd
+from shapely.geometry import box
 import plotly.express as px
+import dash_table
 
 DSA_BASE_URL = "http://glasslab.neurology.emory.edu:8080/api/v1"
 gc = girder_client.GirderClient(apiUrl=DSA_BASE_URL)
@@ -71,9 +74,9 @@ src_dir_labels = "yolo"
 YOLO_OPTIMUS_MODEL = "yolo/models/best.pt"
 YOLO_INPUT_TILE_DIR = "yolo/tiles/images/"
 SAVE_DIR = "yolo"
-predictions_folder = "../runs/detect/predict2"
+predictions_folder = "/runs/detect/predict2"
 
-PREDICTION_FOLDER_ROOT = "../runs/detect"
+PREDICTION_FOLDER_ROOT = "runs/detect"
 sampleImage = "yolo/tiles/images/7-27-2023 E20-18 IGHM GFAP-x2880y2880.png"
 
 # Check or create directories
@@ -287,10 +290,12 @@ def random_rgb_color():
 @callback(
     Output("tile_graph", "figure"),
     Output("yolo-object-info", "children"),
+    Output("dice_coefficient_table","data"),
     Input("inputImage_select", "value"),
     State("imageSetList_store", "data"),
 )
 def updateMainTileDisplay(selectedTileName, imageSetList):
+    dice_coefficient_data=[]
     # print(selectedTileName)
     if imageSetList:
         yoloObjectDataPanel = []
@@ -323,15 +328,18 @@ def updateMainTileDisplay(selectedTileName, imageSetList):
                 yoloObjectDataPanel.append(
                     html.Div(f"Objects in Predicted Set  {len(predictedLabelData)}")
                 )
-
+                
                 r, g, b = colorPalette[len(colorPalette) % (idx + 1)]
                 roiColor = f"rgba({int(r*255)},{int(g*255)},{int(b*255)},1.0)"
                 fig = add_squares_to_figure(fig, predictedLabelData, color=roiColor)
 
+                dice_coefficient_data = calculate_dice_coefficients(labelData, predictedLabelData)
+
+
         fig.update_layout(autosize=True)
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
 
-        return fig, yoloObjectDataPanel
+        return fig, yoloObjectDataPanel, dice_coefficient_data
 
 
 img = io.imread(sampleImage)
@@ -355,6 +363,14 @@ def readYoloLabelFile(filename, scaleFactor=1280):
 
     return data
 
+dice_coefficient_table = dash_table.DataTable(
+    id="dice_coefficient_table",
+    columns=[
+        {"name": "Dice Coefficient", "id": "Dice Coefficient"}
+    ],
+    style_table={"height": "1000px", "overflowY": "auto"},
+)
+
 
 groundTruthEval_panel = dbc.Container(
     [
@@ -376,8 +392,9 @@ groundTruthEval_panel = dbc.Container(
                     ),
                     width=6,
                 ),
-                dbc.Col(html.Div(id="hover-data-info"), width=3),
-                dbc.Col(html.Div(id="yolo-object-info"), width=3),
+                dbc.Col(html.Div(id="hover-data-info"), width=1),
+                dbc.Col(html.Div(id="yolo-object-info") ,width =2),
+                dbc.Col(html.Div([dice_coefficient_table]), width=3),
             ]
         ),
     ]
@@ -550,6 +567,94 @@ def read_images(folder):
     except:
         return []
     return images
+
+
+def calculate_dice_coefficients(selected_ground_truth, predictions):
+    dice_coefficient_data = []
+
+    for idx, gt_label in enumerate(selected_ground_truth):
+        gt_polygon = box(int(gt_label["x0"]), int(gt_label["y0"]), int(gt_label["x0"] + gt_label["w"]), int(gt_label["y0"] + gt_label["h"]))
+        max_dice_coefficient = 0
+
+        for prediction_label in predictions:
+            pred_polygon = box(int(prediction_label["x0"]), int(prediction_label["y0"]), int(prediction_label["x0"] + prediction_label["w"]), int(prediction_label["y0"] + prediction_label["h"]))
+            intersection_area = gt_polygon.intersection(pred_polygon).area
+
+            gt_area = gt_polygon.area
+            pred_area = pred_polygon.area
+
+            dice_coefficient = 2 * intersection_area / (gt_area + pred_area)
+
+            if dice_coefficient > max_dice_coefficient:
+                max_dice_coefficient = dice_coefficient
+
+        dice_coefficient_data.append({
+            "Dice Coefficient": max_dice_coefficient
+        })
+
+    return dice_coefficient_data
+                 
+
+
+
+# @callback(Output("image-display", "children"), [Input("image-display", "id")])
+# def update_images(_):
+#     images = read_images(predictions_folder)
+
+#     # Generate cards for each image
+#     image_cards = [
+#         dbc.Col(
+#             dbc.Card(
+#                 dbc.CardImg(
+#                     id=f"image-{i}",
+#                     src=image["image"],
+#                     top=True,
+#                     style={"width": "100%", "height": "auto"},
+#                 )
+#             )
+#         )
+#         for i, image in enumerate(images)
+#     ]
+
+#     rows = [dbc.Row(image_cards[i : i + 6]) for i in range(0, len(image_cards), 6)]
+
+#     return rows
+
+
+# from dash import html, callback, Input, Output, dcc, dash_table
+# import plotly.graph_objs as go
+# from skimage import io, measure, draw
+# import plotly.express as px
+# from joblib import Memory
+# from skimage.color import rgb2gray
+# from skimage.feature import blob_log
+# import dash_bootstrap_components as dbc
+# import numpy as np
+
+# ### Create local cacheing decorator
+# memory = Memory(".npCacheDir", verbose=0)
+
+
+# @callback(
+#     Output("tile_graph", "figure"),
+#     Input("inputImage_select", "value"),
+#     State("imageSetList_store", "data"),
+# )
+# def updateTileGraph(selectedTile, imageSetList_store):
+#     selected_option = next(
+#         (item for item in imageSetList_store if item["value"] == selectedTile), None
+#     )
+
+#     if selected_option:
+#         tileImagePath = selected_option["gtTileImage"]
+#         print(tileImagePath, "to be loaded for", selectedTile)
+#         img = io.imread(tileImagePath)
+#         print(img.shape)
+#         newFig = px.imshow(img)
+#         newFig.update_layout(autosize=True)
+#         newFig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+
+#         return newFig
 
 
 # @callback(
