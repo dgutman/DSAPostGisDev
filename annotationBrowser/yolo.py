@@ -54,6 +54,7 @@ YOLO_INPUT_TILE_DIR = "yolo/tiles/images/"
 SAVE_DIR = "yolo"
 predictions_folder = "../runs/detect/predict2"
 
+PREDICTION_FOLDER_ROOT = "../runs/detect"
 sampleImage = "yolo/tiles/images/7-27-2023 E20-18 IGHM GFAP-x2880y2880.png"
 
 # Check or create directories
@@ -151,12 +152,23 @@ def findTruthAndPredictionDataSets(truth_tile_dir, prediction_tile_root):
         if not os.path.isfile(gtLabelFile):
             gtLabelFile = None
 
+        tileYoloPredictions = []
+        ## NOW LOOK FOR PREDICTIONS
+        yoloPredictOutputDirs = os.listdir(PREDICTION_FOLDER_ROOT)
+        for pfldr in yoloPredictOutputDirs:
+            curPredictionLabelFile = os.path.join(
+                PREDICTION_FOLDER_ROOT, pfldr, "labels", tileRootFile + ".txt"
+            )
+            if os.path.isfile(curPredictionLabelFile):
+                tileYoloPredictions.append(curPredictionLabelFile)
+
         imageTileData.append(
             {
                 "label": tileRootFile,
                 "value": gtt,
                 "gtTileImage": os.path.join(truth_tile_dir, gtt),
                 "gtLabelFile": gtLabelFile,
+                "predictedLabelFiles": tileYoloPredictions,
             }
         )
     from pprint import pprint
@@ -203,7 +215,9 @@ def updateImageSet_selector(imageSet_data):
     return options, value
 
 
-def add_squares_to_figure(imageFigure, blobs, color="rgba(0, 0, 255, 0.5)"):
+def add_squares_to_figure(
+    imageFigure, blobs, color="rgba(0, 0, 255, 1)", fillSquares=False
+):
     # img = io.imread(sampleImage)
     # fig = px.imshow(img)
     # fig.update_layout(autosize=True)
@@ -222,7 +236,7 @@ def add_squares_to_figure(imageFigure, blobs, color="rgba(0, 0, 255, 0.5)"):
                 x1=blob["x0"] + blob["w"],
                 y1=blob["y0"] + blob["h"],
                 line=dict(color=color),
-                fillcolor=color,
+                # fillcolor=color,
                 name=hovertext,
             )
 
@@ -241,6 +255,16 @@ def add_squares_to_figure(imageFigure, blobs, color="rgba(0, 0, 255, 0.5)"):
             )
 
     return imageFigure
+
+
+import random
+
+
+def random_rgb_color():
+    r = random.randint(0, 255)
+    g = random.randint(0, 255)
+    b = random.randint(0, 255)
+    return f"rgba({r},{g},{b}, 1)"
 
 
 ### Update the image display based on the current displayed image
@@ -268,20 +292,20 @@ def updateMainTileDisplay(selectedTileName, imageSetList):
             labelData = readYoloLabelFile(gtLabelFile)
             fig = add_squares_to_figure(fig, labelData)
 
+        ## NOW SEE IF THERE ARE ANY OTHER RESULTS FILES FROM RUNNING YOLO
+
+        yoloPredictionFiles = selected_option["predictedLabelFiles"]
+        if yoloPredictionFiles:
+            for ypf in yoloPredictionFiles:
+                predictedLabelData = readYoloLabelFile(ypf)
+                fig = add_squares_to_figure(
+                    fig, predictedLabelData, color=random_rgb_color()
+                )
+
         fig.update_layout(autosize=True)
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
 
         return fig
-
-
-#     if selected_option:
-#         img = io.imread(tileImagePath)
-#         print(img.shape)
-#         newFig = px.imshow(img)
-#         newFig.update_layout(autosize=True)
-#         newFig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
-
-#         return newFig
 
 
 img = io.imread(sampleImage)
