@@ -74,9 +74,9 @@ src_dir_labels = "yolo"
 YOLO_OPTIMUS_MODEL = "yolo/models/best.pt"
 YOLO_INPUT_TILE_DIR = "yolo/tiles/images/"
 SAVE_DIR = "yolo"
-predictions_folder = "/runs/detect/predict2"
+predictions_folder = "../runs/detect/predict2"
 
-PREDICTION_FOLDER_ROOT = "runs/detect"
+PREDICTION_FOLDER_ROOT = "../runs/detect"
 sampleImage = "yolo/tiles/images/7-27-2023 E20-18 IGHM GFAP-x2880y2880.png"
 
 # Check or create directories
@@ -290,12 +290,12 @@ def random_rgb_color():
 @callback(
     Output("tile_graph", "figure"),
     Output("yolo-object-info", "children"),
-    Output("dice_coefficient_table","data"),
+    Output("dice_coefficient_table", "data"),
     Input("inputImage_select", "value"),
     State("imageSetList_store", "data"),
 )
 def updateMainTileDisplay(selectedTileName, imageSetList):
-    dice_coefficient_data=[]
+    dice_coefficient_data = []
     # print(selectedTileName)
     if imageSetList:
         yoloObjectDataPanel = []
@@ -328,13 +328,14 @@ def updateMainTileDisplay(selectedTileName, imageSetList):
                 yoloObjectDataPanel.append(
                     html.Div(f"Objects in Predicted Set  {len(predictedLabelData)}")
                 )
-                
+
                 r, g, b = colorPalette[len(colorPalette) % (idx + 1)]
                 roiColor = f"rgba({int(r*255)},{int(g*255)},{int(b*255)},1.0)"
                 fig = add_squares_to_figure(fig, predictedLabelData, color=roiColor)
 
-                dice_coefficient_data = calculate_dice_coefficients(labelData, predictedLabelData)
-
+                dice_coefficient_data = calculate_dice_coefficients(
+                    labelData, predictedLabelData
+                )
 
         fig.update_layout(autosize=True)
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
@@ -363,6 +364,7 @@ def readYoloLabelFile(filename, scaleFactor=1280):
 
     return data
 
+
 # dice_coefficient_table = dash_table.DataTable(
 #     id="dice_coefficient_table",
 #     columns=[
@@ -371,16 +373,10 @@ def readYoloLabelFile(filename, scaleFactor=1280):
 #     style_table={"height": "1000px", "overflowY": "auto"},
 # )
 
+
 dice_coefficient_table = dash_table.DataTable(
     id="dice_coefficient_table",
-    columns=[
-        {"name": "Dice Coefficient", "id": "Dice Coefficient"},
-        {"name": "Blob ID", "id": "Blob ID"},
-        {"name": "Centroid X (Ground Truth)", "id": "Centroid X (Ground Truth)"},
-        {"name": "Centroid Y (Ground Truth)", "id": "Centroid Y (Ground Truth)"},
-        {"name": "Centroid X (Prediction)", "id": "Centroid X (Prediction)"},
-        {"name": "Centroid Y (Prediction)", "id": "Centroid Y (Prediction)"},
-    ],
+    columns=[{"name": "Dice Coefficient", "id": "Dice Coefficient"}],
     style_table={"height": "1000px", "overflowY": "auto"},
 )
 
@@ -407,12 +403,15 @@ groundTruthEval_panel = dbc.Container(
                 ),
                 dbc.Col(
                     [
-                        dbc.Row(html.Div(id="hover-data-info")),
-                        dbc.Row(html.Div(id="yolo-object-info")),
-                    ],
-                    width=2,
+                        dbc.Row(
+                            [
+                                dbc.Col(html.Div(id="hover-data-info"), width=6),
+                                dbc.Col(html.Div(id="yolo-object-info"), width=6),
+                            ]
+                        ),
+                        dbc.Row(html.Div(dice_coefficient_table)),
+                    ]
                 ),
-                dbc.Col(html.Div([dice_coefficient_table]), width=4),
             ]
         ),
     ]
@@ -591,12 +590,22 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
     dice_coefficient_data = []
 
     for idx, gt_label in enumerate(selected_ground_truth):
-        gt_polygon = box(int(gt_label["x0"]), int(gt_label["y0"]), int(gt_label["x0"] + gt_label["w"]), int(gt_label["y0"] + gt_label["h"]))
+        gt_polygon = box(
+            int(gt_label["x0"]),
+            int(gt_label["y0"]),
+            int(gt_label["x0"] + gt_label["w"]),
+            int(gt_label["y0"] + gt_label["h"]),
+        )
         max_dice_coefficient = 0
         best_prediction_id = -1
 
         for prediction_id, prediction_label in enumerate(predictions):
-            pred_polygon = box(int(prediction_label["x0"]), int(prediction_label["y0"]), int(prediction_label["x0"] + prediction_label["w"]), int(prediction_label["y0"] + prediction_label["h"]))
+            pred_polygon = box(
+                int(prediction_label["x0"]),
+                int(prediction_label["y0"]),
+                int(prediction_label["x0"] + prediction_label["w"]),
+                int(prediction_label["y0"] + prediction_label["h"]),
+            )
             intersection_area = gt_polygon.intersection(pred_polygon).area
 
             gt_area = gt_polygon.area
@@ -621,17 +630,18 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
             centroid_y_pred = None
             prediction_id = None
 
-        dice_coefficient_data.append({
-            "Dice Coefficient": max_dice_coefficient,
-            "Blob ID": prediction_id,
-            "Centroid X (Ground Truth)": centroid_x_ground_truth,
-            "Centroid Y (Ground Truth)": centroid_y_ground_truth,
-            "Centroid X (Prediction)": centroid_x_pred,
-            "Centroid Y (Prediction)": centroid_y_pred,
-        })
+        dice_coefficient_data.append(
+            {
+                "Dice Coefficient": max_dice_coefficient,
+                "Blob ID": prediction_id,
+                "Centroid X (Ground Truth)": centroid_x_ground_truth,
+                "Centroid Y (Ground Truth)": centroid_y_ground_truth,
+                "Centroid X (Prediction)": centroid_x_pred,
+                "Centroid Y (Prediction)": centroid_y_pred,
+            }
+        )
 
     return dice_coefficient_data
-
 
 
 # def calculate_dice_coefficients(selected_ground_truth, predictions):
@@ -658,8 +668,6 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
 #         })
 
 #     return dice_coefficient_data
-                 
-
 
 
 # @callback(Output("image-display", "children"), [Input("image-display", "id")])
