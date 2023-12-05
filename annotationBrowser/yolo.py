@@ -10,6 +10,7 @@ from skimage import io
 import plotly.graph_objects as go
 from pprint import pprint
 import distinctipy
+import dash_ag_grid as dag
 
 # from dash import html, callback, Input, Output, dcc, dash_table
 # from skimage import io, measure, draw
@@ -65,7 +66,6 @@ if YoloKEY:
 colorPalette = distinctipy.get_colors(5, exclude_colors=[(0, 0, 1)])
 ## NEED TO FEED IN THE INITIAL BLUE COLOR I AM USING FOR GROUND TRUTH
 ## FOR REFERENCE
-print(colorPalette)
 
 
 ##saving the images locally right now, will need to change this
@@ -214,7 +214,7 @@ imageNav_controls = dbc.Row(
     Output("imageSetList_store", "data"), Input("checkResultsFolder_button", "n_clicks")
 )
 def updateTileImageList(n_clicks):
-    print(n_clicks, "to refresh tile data")
+    # print(n_clicks, "to refresh tile data")
     ## Updating imageSet List store here
     imageSetList = findTruthAndPredictionDataSets(
         YOLO_INPUT_TILE_DIR, predictions_folder
@@ -290,7 +290,7 @@ def random_rgb_color():
 @callback(
     Output("tile_graph", "figure"),
     Output("yolo-object-info", "children"),
-    Output("dice_coefficient_table", "data"),
+    Output("dice_coefficient_table", "rowData"),
     Input("inputImage_select", "value"),
     State("imageSetList_store", "data"),
 )
@@ -343,8 +343,8 @@ def updateMainTileDisplay(selectedTileName, imageSetList):
         return fig, yoloObjectDataPanel, dice_coefficient_data
 
 
-img = io.imread(sampleImage)
-fig = px.imshow(img)
+# img = io.imread(sampleImage)
+# fig = px.imshow(img)
 # return fig
 
 
@@ -365,20 +365,32 @@ def readYoloLabelFile(filename, scaleFactor=1280):
     return data
 
 
+dice_table_cols = [
+    {"label": "Dice Coefficient", "field": "diceCoefficient"},
+    {"label": "Blob ID", "field": "blobID"},
+    {"label": "Centroid X (Ground Truth)", "field": "centroidX_gt"},
+    {"label": "Centroid Y (Ground Truth)", "field": "centroidY_gt"},
+    {"label": "Centroid X (Prediction)", "field": "centroidX_pred"},
+    {"label": "Centroid Y (Prediction)", "field": "centroidY_pred"},
+]
 # dice_coefficient_table = dash_table.DataTable(
 #     id="dice_coefficient_table",
-#     columns=[
-#         {"name": "Dice Coefficient", "id": "Dice Coefficient"}
-#     ],
+#     columns=
 #     style_table={"height": "1000px", "overflowY": "auto"},
 # )
 
-
-dice_coefficient_table = dash_table.DataTable(
+dice_coefficient_table = dag.AgGrid(
     id="dice_coefficient_table",
-    columns=[{"name": "Dice Coefficient", "id": "Dice Coefficient"}],
-    style_table={"height": "1000px", "overflowY": "auto"},
+    columnDefs=dice_table_cols,
+    style={"overflowY": "auto"},
 )
+
+
+# dice_coefficient_table = dash_table.DataTable(
+#     id="dice_coefficient_table",
+#     columns=[{"name": "Dice Coefficient", "id": "Dice Coefficient"}],
+#     style_table={"overflowY": "auto"},
+# )
 
 
 groundTruthEval_panel = dbc.Container(
@@ -390,16 +402,18 @@ groundTruthEval_panel = dbc.Container(
                     dcc.Graph(
                         ## Seed the graph initially with the base image
                         id="tile_graph",
-                        figure=fig,
+                        # figure=fig,
                         responsive=True,
                         style={
                             "height": "90vh",
-                            "width": "100%",
+                            "width": "auto",
                             "padding": 0,
                             "margin": 0,
                         },
                     ),
                     width=6,
+                    style={"padding-left": 0, "margin-left": -300, "margin-top": 0},
+                    className="text-start",
                 ),
                 dbc.Col(
                     [
@@ -410,7 +424,8 @@ groundTruthEval_panel = dbc.Container(
                             ]
                         ),
                         dbc.Row(html.Div(dice_coefficient_table)),
-                    ]
+                    ],
+                    width=6,
                 ),
             ]
         ),
@@ -632,12 +647,12 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
 
         dice_coefficient_data.append(
             {
-                "Dice Coefficient": max_dice_coefficient,
-                "Blob ID": prediction_id,
-                "Centroid X (Ground Truth)": centroid_x_ground_truth,
-                "Centroid Y (Ground Truth)": centroid_y_ground_truth,
-                "Centroid X (Prediction)": centroid_x_pred,
-                "Centroid Y (Prediction)": centroid_y_pred,
+                "diceCoefficient": max_dice_coefficient,
+                "blobID": prediction_id,
+                "centroidX_gt": centroid_x_ground_truth,
+                "centroidY_gt": centroid_y_ground_truth,
+                "centroidX_pred": centroid_x_pred,
+                "centroidY_pred": centroid_y_pred,
             }
         )
 
