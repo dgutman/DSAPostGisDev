@@ -363,10 +363,23 @@ def readYoloLabelFile(filename, scaleFactor=1280):
 
     return data
 
+# dice_coefficient_table = dash_table.DataTable(
+#     id="dice_coefficient_table",
+#     columns=[
+#         {"name": "Dice Coefficient", "id": "Dice Coefficient"}
+#     ],
+#     style_table={"height": "1000px", "overflowY": "auto"},
+# )
+
 dice_coefficient_table = dash_table.DataTable(
     id="dice_coefficient_table",
     columns=[
-        {"name": "Dice Coefficient", "id": "Dice Coefficient"}
+        {"name": "Dice Coefficient", "id": "Dice Coefficient"},
+        {"name": "Blob ID", "id": "Blob ID"},
+        {"name": "Centroid X (Ground Truth)", "id": "Centroid X (Ground Truth)"},
+        {"name": "Centroid Y (Ground Truth)", "id": "Centroid Y (Ground Truth)"},
+        {"name": "Centroid X (Prediction)", "id": "Centroid X (Prediction)"},
+        {"name": "Centroid Y (Prediction)", "id": "Centroid Y (Prediction)"},
     ],
     style_table={"height": "1000px", "overflowY": "auto"},
 )
@@ -392,9 +405,14 @@ groundTruthEval_panel = dbc.Container(
                     ),
                     width=6,
                 ),
-                dbc.Col(html.Div(id="hover-data-info"), width=1),
-                dbc.Col(html.Div(id="yolo-object-info") ,width =2),
-                dbc.Col(html.Div([dice_coefficient_table]), width=3),
+                dbc.Col(
+                    [
+                        dbc.Row(html.Div(id="hover-data-info")),
+                        dbc.Row(html.Div(id="yolo-object-info")),
+                    ],
+                    width=2,
+                ),
+                dbc.Col(html.Div([dice_coefficient_table]), width=4),
             ]
         ),
     ]
@@ -575,8 +593,9 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
     for idx, gt_label in enumerate(selected_ground_truth):
         gt_polygon = box(int(gt_label["x0"]), int(gt_label["y0"]), int(gt_label["x0"] + gt_label["w"]), int(gt_label["y0"] + gt_label["h"]))
         max_dice_coefficient = 0
+        best_prediction_id = -1
 
-        for prediction_label in predictions:
+        for prediction_id, prediction_label in enumerate(predictions):
             pred_polygon = box(int(prediction_label["x0"]), int(prediction_label["y0"]), int(prediction_label["x0"] + prediction_label["w"]), int(prediction_label["y0"] + prediction_label["h"]))
             intersection_area = gt_polygon.intersection(pred_polygon).area
 
@@ -587,12 +606,58 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
 
             if dice_coefficient > max_dice_coefficient:
                 max_dice_coefficient = dice_coefficient
+                best_prediction_id = prediction_id
+
+        centroid_x_ground_truth = gt_label["x0"] + gt_label["w"] / 2
+        centroid_y_ground_truth = gt_label["y0"] + gt_label["h"] / 2
+
+        if best_prediction_id != -1:
+            pred_label = predictions[best_prediction_id]
+            centroid_x_pred = pred_label["x0"] + pred_label["w"] / 2
+            centroid_y_pred = pred_label["y0"] + pred_label["h"] / 2
+            prediction_id = best_prediction_id
+        else:
+            centroid_x_pred = None
+            centroid_y_pred = None
+            prediction_id = None
 
         dice_coefficient_data.append({
-            "Dice Coefficient": max_dice_coefficient
+            "Dice Coefficient": max_dice_coefficient,
+            "Blob ID": prediction_id,
+            "Centroid X (Ground Truth)": centroid_x_ground_truth,
+            "Centroid Y (Ground Truth)": centroid_y_ground_truth,
+            "Centroid X (Prediction)": centroid_x_pred,
+            "Centroid Y (Prediction)": centroid_y_pred,
         })
 
     return dice_coefficient_data
+
+
+
+# def calculate_dice_coefficients(selected_ground_truth, predictions):
+#     dice_coefficient_data = []
+
+#     for idx, gt_label in enumerate(selected_ground_truth):
+#         gt_polygon = box(int(gt_label["x0"]), int(gt_label["y0"]), int(gt_label["x0"] + gt_label["w"]), int(gt_label["y0"] + gt_label["h"]))
+#         max_dice_coefficient = 0
+
+#         for prediction_label in predictions:
+#             pred_polygon = box(int(prediction_label["x0"]), int(prediction_label["y0"]), int(prediction_label["x0"] + prediction_label["w"]), int(prediction_label["y0"] + prediction_label["h"]))
+#             intersection_area = gt_polygon.intersection(pred_polygon).area
+
+#             gt_area = gt_polygon.area
+#             pred_area = pred_polygon.area
+
+#             dice_coefficient = 2 * intersection_area / (gt_area + pred_area)
+
+#             if dice_coefficient > max_dice_coefficient:
+#                 max_dice_coefficient = dice_coefficient
+
+#         dice_coefficient_data.append({
+#             "Dice Coefficient": max_dice_coefficient
+#         })
+
+#     return dice_coefficient_data
                  
 
 
