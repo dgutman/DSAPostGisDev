@@ -8,7 +8,7 @@ from annotationTableView import annotationTable_layout
 from app_config import app
 from tissueSegModel_panel import tissueSegModel_panel
 from yolo import run_yolo
-
+from emdataYolo import run_yolo_em
 tab_layout = dmc.Tabs(
     [
         dmc.TabsList(
@@ -18,6 +18,7 @@ tab_layout = dmc.Tabs(
                 dmc.Tab("Annotation Table", value="annotationTable"),
                 dmc.Tab("Run Tissue Seg", value="tissueSegModel"),
                 dmc.Tab("Yolov8 Results", value="yolo"),
+                dmc.Tab("EM Data Results", value="emdata_yolo"),
             ]
         ),
         dmc.TabsPanel(annotation_panel, value="annotationPanel"),
@@ -25,6 +26,7 @@ tab_layout = dmc.Tabs(
         dmc.TabsPanel(annotationTable_layout, value="annotationTable"),
         dmc.TabsPanel(tissueSegModel_panel, value="tissueSegModel"),
         dmc.TabsPanel(run_yolo, value="yolo"),
+        dmc.TabsPanel(run_yolo_em, value="emdata_yolo")
     ],
     color="blue",
     orientation="horizontal",
