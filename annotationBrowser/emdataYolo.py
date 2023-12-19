@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 from pprint import pprint
 import distinctipy
 import dash_ag_grid as dag
+from itertools import zip_longest
+
 
 # from dash import html, callback, Input, Output, dcc, dash_table
 # from skimage import io, measure, draw
@@ -423,12 +425,15 @@ def random_rgb_color():
     Output("em_tile_graph", "figure"),
     Output("em_yolo-object-info", "children"),
     Output("em_dice_coefficient_table", "rowData"),
+    Output("em_confusion_matrix_table", "data"),
     Input("em_inputImage_select", "value"),
     State("em_imageSetList_store", "data"),
 )
 def em_updateMainTileDisplay(selectedTileName, imageSetList):
-    dice_coefficient_data = []
-    # print(selectedTileName)
+    dice_coefficient_data_gt = []
+    dice_coefficient_data_pred = []
+    confusion_matrix_data = []
+
     if imageSetList:
         yoloObjectDataPanel = []
 
@@ -468,15 +473,49 @@ def em_updateMainTileDisplay(selectedTileName, imageSetList):
 
                 fig = add_squares_to_figure(fig, predictedLabelData, label_colors=label_colors)
 
+                dice_coefficient_data_gt.extend(calculate_dice_coefficients(labelData, predictedLabelData))
+                dice_coefficient_data_pred.extend(calculate_dice_coefficients(predictedLabelData, labelData))
 
-                dice_coefficient_data = calculate_dice_coefficients(
-                    labelData, predictedLabelData
+                true_positives, false_negatives, false_positives = calculate_confusion_matrix(labelData, predictedLabelData)
+
+                confusion_matrix_data.append(
+                    {
+                        "Metric": "True Positives",
+                        "Value": true_positives,
+                    }
+                )
+                confusion_matrix_data.append(
+                    {
+                        "Metric": "False Negatives",
+                        "Value": false_negatives,
+                    }
+                )
+                confusion_matrix_data.append(
+                    {
+                        "Metric": "False Positives",
+                        "Value": false_positives,
+                    }
                 )
 
         fig.update_layout(autosize=True)
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
 
-        return fig, yoloObjectDataPanel, dice_coefficient_data
+        dice_coefficient_data_combined = []
+        for gt_data, pred_data in zip_longest(dice_coefficient_data_gt, dice_coefficient_data_pred, fillvalue={}):
+            dice_coefficient_data_combined.append({
+                "diceCoefficient_gt": gt_data.get("diceCoefficient", None),
+                "blobID_gt": gt_data.get("blobID", None),
+                "centroidX_gt": gt_data.get("centroidX_gt", None),
+                "centroidY_gt": gt_data.get("centroidY_gt", None),
+                "centroidX_pred": pred_data.get("centroidX_pred", None),
+                "centroidY_pred": pred_data.get("centroidY_pred", None),
+                "diceCoefficient_pred": pred_data.get("diceCoefficient", None),
+            })
+
+        return fig, yoloObjectDataPanel, dice_coefficient_data_combined, confusion_matrix_data
+
+
+        # return fig, yoloObjectDataPanel, dice_coefficient_data_gt, dice_coefficient_data_pred, confusion_matrix_data
 
 
 # img = io.imread(sampleImage)
@@ -520,13 +559,15 @@ def readYoloLabelFile(filename, scaleFactor=1280):
 
 
 dice_table_cols = [
-    {"label": "Dice Coefficient", "field": "diceCoefficient"},
-    {"label": "Blob ID", "field": "blobID"},
+    {"label": "Dice Coefficient (Ground Truth)", "field": "diceCoefficient_gt"},
+    {"label": "Dice Coefficient (Prediction)", "field": "diceCoefficient_pred"},
+    {"label": "Blob ID (Ground Truth)", "field": "blobID_gt"},
     {"label": "Centroid X (Ground Truth)", "field": "centroidX_gt"},
     {"label": "Centroid Y (Ground Truth)", "field": "centroidY_gt"},
     {"label": "Centroid X (Prediction)", "field": "centroidX_pred"},
-    {"label": "Centroid Y (Prediction)", "field": "centroidY_pred"},
+    {"label": "Centroid Y (Prediction)", "field": "centroidY_pred"}, 
 ]
+
 # dice_coefficient_table = dash_table.DataTable(
 #     id="dice_coefficient_table",
 #     columns=
@@ -537,6 +578,15 @@ dice_coefficient_table = dag.AgGrid(
     id="em_dice_coefficient_table",
     columnDefs=dice_table_cols,
     style={"overflowY": "auto"},
+)
+
+confusion_matrix_table = dash_table.DataTable(
+    id="em_confusion_matrix_table",
+    columns=[
+        {"name": "Metric", "id": "Metric"},
+        {"name": "Value", "id": "Value"},
+    ],
+    style_table={"height": "100px", "overflowY": "auto"},
 )
 
 em_groundTruthEval_panel = dbc.Container(
@@ -570,6 +620,7 @@ em_groundTruthEval_panel = dbc.Container(
                             ]
                         ),
                         dbc.Row(html.Div(dice_coefficient_table)),
+                        dbc.Row(html.Div(confusion_matrix_table)),
                     ],
                     width=6,
                 ),
@@ -710,6 +761,40 @@ def calculate_dice_coefficients(selected_ground_truth, predictions):
         )
 
     return dice_coefficient_data
+
+def calculate_confusion_matrix(gt_data_set, predictions, threshold=0.25):
+    true_positives = 0
+    false_positives = 0
+    false_negatives = 0
+
+    gt_dice_coefficient_data = calculate_dice_coefficients(gt_data_set, predictions)
+    pred_dice_coefficient_data = calculate_dice_coefficients(predictions, gt_data_set)
+
+    for gt_data in gt_dice_coefficient_data:
+        dice_coefficient = gt_data["diceCoefficient"]
+
+        if dice_coefficient > threshold:
+            true_positives += 1
+        else:
+            false_negatives += 1
+
+    for pred_data in pred_dice_coefficient_data:
+        dice_coefficient = pred_data["diceCoefficient"]
+
+        if dice_coefficient > threshold:
+            is_true_positive = any(
+                gt_data["diceCoefficient"] > threshold
+                for gt_data in gt_dice_coefficient_data
+                if gt_data["blobID"] == pred_dice_coefficient_data.index(pred_data)
+            )
+
+            if not is_true_positive:
+                false_positives += 1
+            
+
+    return true_positives, false_negatives, false_positives
+
+
 
 @callback(Output("em_hover-data-info", "children"), Input("em_tile_graph", "hoverData"))
 def display_hover_data(hoverData):
