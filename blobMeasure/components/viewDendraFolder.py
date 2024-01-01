@@ -1,16 +1,16 @@
-import girder_client, json
+import girder_client, json, re
 import dotenv, os, girder_client
 import dash_ag_grid as dag
 from joblib import Memory
 from dbHelpers import generate_generic_DataTable, register_images_ver3
 from dash import html, Input, State, Output, callback, dcc
 import pandas as pd
-import re
 from dbHelpers import getImageThumb_as_NP, plotImageAnnotations
 import dash_bootstrap_components as dbc
 import concurrent.futures
 import numpy as np
 import pandas as pd
+import dash_mantine_components as dmc
 
 ## Needto import this from one place
 memory = Memory(".npCacheDir", verbose=0)
@@ -23,6 +23,12 @@ _ = gc.authenticate(apiKey=apiKey)
 
 
 denraFolderId = "65551c06d4d8e688cd09c0fb"
+
+
+cardBodyStyle = {
+    "padding": "5px",  # Minimize padding but keep some for text
+    "textAlign": "center",
+}
 
 
 imageNamePattern = re.compile(
@@ -52,8 +58,6 @@ def parseExperimentFolder(folderId):
     return df
 
 
-import numpy as np
-
 df = parseExperimentFolder(denraFolderId)
 
 ##Generate area to show image of selected row
@@ -72,7 +76,7 @@ expCombo = dbc.Select(
 )
 
 
-sampleExpGrid = dag.AgGrid(
+expGrid = dag.AgGrid(
     id="experimentTable",
     columnDefs=[{"field": x} for x in df.columns],
     rowData=df.to_dict("records"),
@@ -120,6 +124,52 @@ imageRegData_table = dag.AgGrid(
 )
 
 
+expGrid_layout = dbc.Accordion(
+    [
+        dbc.AccordionItem(
+            [expGrid],
+            title="Sample Exp Grid",
+            id="expt-grid-accordion-item",
+        ),
+        dbc.AccordionItem(
+            [imageRegData_table],
+            title="Image Registration Data",
+            id="imageRegData_table_accordion",
+        ),
+    ],
+    id="exptGrid-accordion",
+    # start_collapsed=True,
+)
+
+
+viewRegResults_layout = dbc.Row(
+    [
+        dbc.Col(
+            dbc.Card(
+                [
+                    dbc.CardBody("FIXED", className="card-text", style=cardBodyStyle),
+                    dcc.Graph(
+                        id="expTable_fixedImage",
+                    ),
+                ],
+                color="primary",
+            ),
+            width=3,
+        ),
+        dbc.Col(
+            dbc.Card(
+                [
+                    dbc.CardBody("Moving", className="card-text", style=cardBodyStyle),
+                    dcc.Graph(id="expTable_movingImage"),
+                ],
+                color="primary",
+            ),
+            width=3,
+        ),
+    ]
+)
+
+
 experimentView_panel = html.Div(
     [
         dbc.Row(
@@ -133,14 +183,27 @@ experimentView_panel = html.Div(
                 expCombo,
             ]
         ),
-        dbc.Row(sampleExpGrid, style={"flex": "2"}),  # Flex value of 1
+        dbc.Row(expGrid_layout, style={"flex": "1"}),  # Flex value of 1
+        # dbc.Row(imageRegTable_accordion, style={"flex": "1"}),  # Flex value of 1
         dbc.Row(
             [html.Div(id="selectedImage_viz")], style={"flex": "1"}
         ),  # Flex value of 1
-        dbc.Row(imageRegData_table),
+        viewRegResults_layout,
     ],
     style={"display": "flex", "flexDirection": "column", "height": "90vh"},
 )
+
+
+@callback(
+    Output("expTable_fixedImage", "figure"),
+    Input("imageRegTable", "selectedRows"),
+)
+def showRegTable_ImageSet(selectedRow):
+    if selectedRow:
+        imageId = selectedRow[0]["fixedImage_id"]
+        # imageThumb = getImageThumb_as_NP(imageId)
+        imageThumb = plotImageAnnotations(imageId)
+        return imageThumb
 
 
 # def pullOrGenerateExperimentRegistrations(n_clicks, selectedExpData):
@@ -172,21 +235,28 @@ def pullOrGenerateExperimentRegistrations(n_clicks, selectedExpData):
     if n_clicks:
         exp_df = pd.DataFrame(selectedExpData)
 
+        print("Processing experiment registration data")
+
         def process_registration(r):
-            print(r["name"])
             regData = getImageRegPair(exp_df, r["_id"])
+
             tableData = {"imageName": r["name"]}
             tableData.update(regData)
+            print(regData["movingImage"], "-->", regData["fixedImage"])
             return tableData
 
-        # Use ThreadPoolExecutor to run tasks in parallel
+        # for row in selectedExpData:
+        # regInfo = process_registration(row)
+        # # Use ThreadPoolExecutor to run tasks in parallel
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            expStatusData = list(executor.map(process_registration, selectedExpData))
+            expStatusData = list(
+                executor.map(process_registration, selectedExpData[:3])
+            )
 
         return expStatusData
 
 
-def getImageRegPair(experimentData, imageId):
+def getImageRegPair(experimentData, imageId, computeXFM=True):
     ### Given an imageID, this will try and find the appropriate image to register to it to
     ### The image should have the same color and also be the
     df = pd.DataFrame(experimentData)
@@ -211,19 +281,26 @@ def getImageRegPair(experimentData, imageId):
         fixedImageName = df_sorted_filtered_asc.iloc[0].to_dict()["name"]
         fixedImage_id = df_sorted_filtered_asc.iloc[0].to_dict()["_id"]
 
-        fixedImage_npArray = getImageThumb_as_NP(fixedImage_id)
-        movingImage_npArray = getImageThumb_as_NP(movingImage_id)
+        fixedImage_npArray = getImageThumb_as_NP(fixedImage_id, imageWidth=256)
+        movingImage_npArray = getImageThumb_as_NP(movingImage_id, imageWidth=256)
 
         # hash_value = np.array_hash(array)
         fixedImage_hash = hash(fixedImage_npArray.tobytes())
         movingImage_hash = hash(movingImage_npArray.tobytes())
-        # try:
-        image_xfms = register_images_ver3(fixedImage_npArray, movingImage_npArray)
+
+        print(fixedImage_npArray.shape, movingImage_npArray.shape)
+        if computeXFM:
+            try:
+                image_xfms = register_images_ver3(
+                    fixedImage_npArray, movingImage_npArray, computeXFM=False
+                )
+            except:
+                print("Image Registration Failed")
+                image_xfms = {}
+        else:
+            image_xfms = {}
+
         print(image_xfms)
-        # except:
-        #     print("Image Registration Failed")
-        #     image_xfms = {}
-        # print(image_xfms)
 
         # print(f"Generating registration from {movingImageName} to {fixedImageName}")
         return {
@@ -235,14 +312,10 @@ def getImageRegPair(experimentData, imageId):
             "fixedImage_hash": fixedImage_hash,
             "forward_xfm": image_xfms.get("xfm", None),
             "inv_xfm": image_xfms.get("inv_xfm", None),
+            "regImageSize": 256,
         }
 
         ## Now get the dataframe sorted and filtered by color and then timePoint
-
-
-# # Example usage
-# image_id_to_lookup = 2
-# result_dict = get_row_as_dict(df, image_id_to_lookup)
 
 
 @callback(
@@ -257,13 +330,13 @@ def filterExperimentFolderForTable(expName, folderData):
     return df.to_dict("records")
 
 
-@callback(
-    Output("selectedImage_viz", "children"),
-    Input("experimentTable", "selectedRows"),
-)
-def showSelectedImage(selectedRow):
-    if selectedRow:
-        imageId = selectedRow[0]["_id"]
-        # imageThumb = getImageThumb_as_NP(imageId)
-        imageThumb = plotImageAnnotations(imageId)
-        return imageThumb
+# @callback(
+#     Output("selectedImage_viz", "children"),
+#     Input("experimentTable", "selectedRows"),
+# )
+# def showSelectedImage(selectedRow):
+#     if selectedRow:
+#         imageId = selectedRow[0]["_id"]
+#         # imageThumb = getImageThumb_as_NP(imageId)
+#         imageThumb = plotImageAnnotations(imageId)
+#         return imageThumb
