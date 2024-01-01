@@ -412,7 +412,7 @@ groundTruthEval_panel = dbc.Container(
                         },
                     ),
                     width=6,
-                    style={"padding-left": 0, "margin-left": -300, "margin-top": 0},
+                    style={"padding-left": 0, "margin-left": 0, "margin-top": 0},
                     className="text-start",
                 ),
                 dbc.Col(

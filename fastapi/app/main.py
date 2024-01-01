@@ -20,6 +20,8 @@ from .models import (
     featureExtractionParams,
     imageFeatureSets,
     NPfeatureSet,
+    DSAFeatureSetFile,
+    VandyCellFeatures,
 )
 from .utils import extend_dict, pretify_address
 
@@ -38,6 +40,47 @@ def on_startup():
     create_db_and_tables()
 
 
+sampleRecord = VandyCellFeatures(
+    featureSetId=1,
+    localFeatureId=1,
+    UniqueID="ID-00-00-000001",
+    Cell_Centroid_X=225.660305343511,
+    Cell_Centroid_Y=2830.02290076336,
+    Cell_Area=262.0,
+    Percent_Epithelium=100.0,
+    Percent_Stroma=0.0,
+    Nuc_Area=107.0,
+    Mem_Area=114.0,
+    Cyt_Area=41.0,
+    Stain_Marker_Embeddings=[
+        0.0806113682693119,
+        0.0886383951698557,
+        1427.0,
+        634.854961832061,
+        4737.5,
+        2146.84732824427,
+        2826.0,
+        486.202290076336,
+        0.00294379670564434,
+        0.0025090530500571,
+        0.0,
+        9.9236641221374,
+        33.5,
+        28.4809160305344,
+        120.0,
+        18.2404580152672,
+        0.00215293712774511,
+        0.0019923398137027,
+        42.0,
+        20.9580152671756,
+        59.5,
+        29.0229007633588,
+        114.0,
+        16.706106870229,
+    ],
+)
+
+
 @app.post("/addTileFeatures")
 async def post_tileFeatures(featureBatch: List[tileFeatures]):
     tileData = [tile_obj.dict() for tile_obj in featureBatch]
@@ -45,6 +88,51 @@ async def post_tileFeatures(featureBatch: List[tileFeatures]):
         session.bulk_insert_mappings(tileFeatures, tileData)
         session.commit()
     return "Tile Feature Data added"
+
+
+from pydantic import BaseModel
+
+
+class SampleCellData(BaseModel):
+    name: str
+    cellType: int
+
+
+@app.post("/insertTestFeatures")
+async def post_testFeatures(featureJson: SampleCellData):
+    print(featureJson)
+
+
+@app.post("/insertVandyCellFeatures")
+async def insert_vandy_cell_features(vandy_features: List[VandyCellFeatures]):
+    # Process and store the vandy_features in the database
+    # Replace this with your actual database storage logic
+    with Session(engine) as session:
+        for feature in vandy_features:
+            session.add(feature)
+            session.commit()
+        return "Inserted sample record"
+        #     session.bulk_insert_mappings(VandyCellFeatures, cellData)
+        #     session.commit()
+
+        # Store the feature in the database
+        # Example: feature.save_to_database()
+        pass
+
+    return {"message": "VandyCellFeatures inserted successfully"}
+
+
+# @app.post("/insertVandyCellFeatures")
+# async def post_vandyFeatures(vandyFeatureBatch: List[VandyCellFeatures]):
+#     print(len(vandyFeatureBatch), "Records were received")
+#     # cellData = [cell_obj.model_dump() for cell_obj in vandyFeatureBatch]
+#     # with Session(engine) as session:
+#     #     session.add(sampleRecord)
+#     #     session.commit()
+#     #     return "Inserted sample record"
+#     #     session.bulk_insert_mappings(VandyCellFeatures, cellData)
+#     #     session.commit()
+#     # return "Cell Feature Data added"
 
 
 @app.delete("/deleteTileFeatures")
@@ -237,17 +325,57 @@ async def get_featureSetId(imageId: str, magnification: float, tileSizeParam: st
     return None
 
 
+## Do I add an imageId mechanism as well... hmmm..
+
+
 @app.get("/lookupImage")
 async def lookupImage(imageName: str, dsaApiUrl: str):
     with Session(engine) as session:
         print(imageName)
         imageInfo = (
-            session.query(DSAImage).filter(DSAImage.imageName == imageName).first()
+            session.exec(DSAImage).filter(DSAImage.imageName == imageName).first()
         )
         # return imageInfo
         return imageInfo
 
-    return None
+
+@app.get("/lookupImageById")
+async def lookupImage(imageId: str, dsaApiUrl: str):
+    with Session(engine) as session:
+        # print(imageName)
+        imageInfo = session.exec(DSAImage).filter(DSAImage.imageId == imageId).first()
+        return imageInfo
+
+
+@app.get("/lookupFeatureSetFile")
+async def lookupFeatureSetFile(dsaFileId: str, dsaApiUrl: str):
+    with Session(engine) as session:
+        localFeatureSetFileInfo = (
+            session.exec(DSAFeatureSetFile)
+            .filter(DSAFeatureSetFile.dsaFileId == dsaFileId)
+            .first()
+        )
+        # # return imageInfo
+        return localFeatureSetFileInfo
+
+
+@app.post("/insertFeatureSetFile")
+async def insertFeatureSetFile(featureSetFileInfo: DSAFeatureSetFile):
+    print(featureSetFileInfo, "was received from the client")
+
+    with Session(engine) as session:
+        exist = (
+            session.query(DSAFeatureSetFile)
+            .filter(DSAFeatureSetFile.dsaFileId == featureSetFileInfo.dsaFileId)
+            .first()
+        )
+        if exist:
+            return exist
+        else:
+            session.add(featureSetFileInfo)
+            session.commit()
+            session.refresh(featureSetFileInfo)
+            return featureSetFileInfo  ## This should return a fresh copy of the extracted feature..
 
 
 @app.post("/add-DSAImage/")

@@ -6,6 +6,34 @@ from geoalchemy2.types import Geometry
 from typing import Any, List, Optional
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import UniqueConstraint, Column, String
+from sqlalchemy.ext.mutable import Mutable
+from sqlalchemy.dialects.postgresql import ARRAY
+from typing import Dict
+
+
+class MutableVector(Mutable, list):
+    def append(self, value):
+        list.append(self, value)
+        self.changed()
+
+
+from sqlalchemy.dialects import (
+    postgresql,
+)  # ARRAY contains requires dialect specific type
+
+
+## These should primarily be CSV files that are stored on the DSA contained precomputed features
+## That I wil be intersting into a local postgres database
+class DSAFeatureSetFile(SQLModel, table=True, extend_existing=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dsaFileId: str = Field(sa_column=Column(String, unique=True))
+    apiUrl: str
+    fileSize: int
+    fileName: str
+    sha512: Optional[str] = Field(default=None)
+    featureType: str
+    featureSetComputeTime: Optional[float] = Field(default=None)
+    objectCount: Optional[int] = Field(default=None)
 
 
 class DSAImage(SQLModel, table=True, extend_existing=True):
@@ -23,10 +51,6 @@ class DSAImage(SQLModel, table=True, extend_existing=True):
     tileHeight: int
 
 
-from sqlalchemy.dialects import (
-    postgresql,
-)  # ARRAY contains requires dialect specific type
-
 ##ID,First ID,UniqueID,Cell_Centroid_X,Cell_Centroid_Y,Cell_Area,Percent_Epithelium,Percent_Stroma,Nuc_Area,Mem_Area,Cyt_Area
 # ,ACTININ,BCATENIN,CD11B,CD20,CD3D,CD4,CD45,CD45B,CD68,CD8,CGA,COLLAGEN,COX2,DAPI,ERBB2,FOXP3,GACTIN,HLAA,LYSOZYME,MUC2,NAKATPASE,OLFM4,PANCK,PCNA,PDL1,PEGFR,PSTAT3,SMA,SNA,SOX9,VIMENTIN
 
@@ -34,9 +58,11 @@ from sqlalchemy.dialects import (
 The Stain_Marker_Embeddings are stored in the feature extraction parameters"""
 
 
-class VandyCellFeatures(SQLModel):
+class VandyCellFeatures(SQLModel, table=True, extend_existing=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    featureSetId: int
     localFeatureId: int
+    UniqueID: str
     Cell_Centroid_X: float
     Cell_Centroid_Y: float
     Cell_Area: float
@@ -45,7 +71,64 @@ class VandyCellFeatures(SQLModel):
     Nuc_Area: float
     Mem_Area: float
     Cyt_Area: float
-    Stain_Marker_Embeddings: List[float] = Field(sa_column=Column(Vector(50)))
+    Stain_Marker_Embeddings: List[float] = Field(
+        sa_column=Column(Vector(224))  # , server_default="{}")
+    )
+    #   Stain_Marker_Embeddings: List[float] = Field(
+    #     sa_column=Column(ARRAY(Float), server_default="{}")
+    # )
+
+    # Field(sa_column=Column(Vector(50)))
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        converted_data = {}
+        for key, value in data.items():
+            if key != "Stain_Marker_Embeddings":
+                try:
+                    converted_data[key] = float(value)
+                except ValueError:
+                    converted_data[key] = value
+            else:
+                converted_data[key] = value
+        return cls(**converted_data)
+
+    # @classmethod
+    # def from_dict(cls, data: dict):
+    #     for key, value in data.items():
+    #         if key != "Stain_Marker_Embeddings":
+    #             try:
+    #                 setattr(cls, key, float(value))
+    #             except ValueError:
+    #                 setattr(cls, key, value)
+    #         else:
+    #             setattr(cls, key, value)
+    #     return cls(**data)
+    def to_dict_padded(self) -> Dict[str, any]:
+        expected_length = 50  # Update this with the desired length
+        padded_embeddings = self.Stain_Marker_Embeddings + [0.0] * (
+            expected_length - len(self.Stain_Marker_Embeddings)
+        )
+        data_dict = self.to_dict()
+        data_dict["Stain_Marker_Embeddings"] = padded_embeddings
+        return data_dict
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "featureSetId": self.featureSetId,
+            "localFeatureId": self.localFeatureId,
+            "UniqueID": self.UniqueID,
+            "Cell_Centroid_X": self.Cell_Centroid_X,
+            "Cell_Centroid_Y": self.Cell_Centroid_Y,
+            "Cell_Area": self.Cell_Area,
+            "Percent_Epithelium": self.Percent_Epithelium,
+            "Percent_Stroma": self.Percent_Stroma,
+            "Nuc_Area": self.Nuc_Area,
+            "Mem_Area": self.Mem_Area,
+            "Cyt_Area": self.Cyt_Area,
+            "Stain_Marker_Embeddings": self.Stain_Marker_Embeddings,
+        }
 
 
 class tileFeatures(SQLModel, table=True):
@@ -60,10 +143,18 @@ class tileFeatures(SQLModel, table=True):
     featureType: str  ### Should be something like imgHistogram
     ftxtract_id: int
     localTileId: str  ## This is most likely the tilePosition in the current run
-    red: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.ARRAY(Integer())))
-    green: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.ARRAY(Integer())))
-    blue: Optional[List[int]] = Field(default=None, sa_column=Column(postgresql.ARRAY(Integer())))
-    average: Optional[List[float]] = Field(default=None, sa_column=Column(postgresql.ARRAY(Float())))
+    red: Optional[List[int]] = Field(
+        default=None, sa_column=Column(postgresql.ARRAY(Integer()))
+    )
+    green: Optional[List[int]] = Field(
+        default=None, sa_column=Column(postgresql.ARRAY(Integer()))
+    )
+    blue: Optional[List[int]] = Field(
+        default=None, sa_column=Column(postgresql.ARRAY(Integer()))
+    )
+    average: Optional[List[float]] = Field(
+        default=None, sa_column=Column(postgresql.ARRAY(Float()))
+    )
 
     # Needed for Column(JSON)
     class Config:
@@ -103,7 +194,7 @@ class featureSetExtractionParams(SQLModel, table=True, extend_existing=True):
     totalObjects: int
     magnification: Optional[float]
     extractionParams: dict = Field(sa_column=Column(JSON), default={})
-    resultsFileMD5 = str
+    resultsFileMD5: str
 
 
 class featureExtractionParams(SQLModel, table=True, extend_existing=True):

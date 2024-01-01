@@ -497,6 +497,28 @@ def em_updateMainTileDisplay(selectedTileName, imageSetList):
                     }
                 )
 
+        ### Pick a threshold for diceiness... and then count objects
+
+        ## But we will add a slider to recompute things, make it fun!
+        ## NEED TO DO THE FOLLOWING:
+            #  truePositives, trueNegatives??, falsePositives, falseNegative...
+            ## Given dice > 0.5
+            ## For blob in gt_data_set:
+                ## if dice_coefficent > thr:
+                ##        truePositives +=1
+                ## elif dice_coefficient <= thr:
+                ## falseNegative +=1
+                # 
+            ## Now blob in predicted_data_set:
+            ##  Now we want to cycle through predictions that have no corresponding ground truth label
+                ### for blob in predicted_data_set:
+                ##   This is weird logic, but we need to find things that the prediction says are real
+                ### but that are not in the ground truth data set
+                ## for blob in predicted_data_set:
+                ##   if dice_coefficient < thr:  ## NOTE WEIRD LOGIC, BECAUSE DICE COEFFICIENT IS COMPUTED BASED ON the ground truth existing..
+                ##       falsePositive +=1
+
+
         fig.update_layout(autosize=True)
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
 

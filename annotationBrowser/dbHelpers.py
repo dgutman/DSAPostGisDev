@@ -240,11 +240,12 @@ def getImageInfo(imageId):
 
 
 # @memory.cache
-def getImageThumb_as_NP(imageId, imageWidth=512):
+def getImageThumb_as_NP(imageId, imageWidth=1024):
     ## TO DO: Cache this?
     try:
         pickledItem = gc.get(
-            f"item/{imageId}/tiles/thumbnail?encoding=pickle&frame=0", jsonResp=False
+            f"item/{imageId}/tiles/thumbnail?encoding=pickle&frame=0&width={imageWidth}",
+            jsonResp=False,
         )
         ## Need to have or cache the baseImage size as well... another feature to add
         baseImage_as_np = pickle.loads(pickledItem.content)
