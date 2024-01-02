@@ -1,10 +1,10 @@
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from sqlmodel import Session, select
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.functions import ST_Distance, ST_AsGeoJSON, ST_MakeEnvelope
 from sqlalchemy.orm import load_only
-from sqlalchemy import func, and_, delete
+from sqlalchemy import func, and_, delete, select
 import numpy as np
 import random, requests
 import girder_client
@@ -12,7 +12,7 @@ from typing import List
 from .utils import computeColorSimilarityForFeatureSet
 
 
-from .services import engine, create_db_and_tables
+from .services import engine, create_db_and_tables, SessionLocal
 from .models import (
     SimpleRectangles,
     DSAImage,
@@ -103,21 +103,109 @@ async def post_testFeatures(featureJson: SampleCellData):
     print(featureJson)
 
 
+from sqlalchemy.dialects.postgresql import insert
+
+
+def get_db() -> Session:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_vandyRecord_objectCount(db: Session, feature_set_id: int) -> int:
+    with Session(engine) as session:
+        record_count = (
+            session.query(VandyCellFeatures)
+            .filter(VandyCellFeatures.featureSetId == feature_set_id)
+            .count()
+        )
+        return record_count
+    # query = select(func.count()).where(VandyCellFeatures.featureSetId == feature_set_id)
+    # record_count = db.exec(query).scalar()
+    # print(record_count)
+    # return record_count
+
+
+#   with Session(engine) as session:
+#         tileData = (
+#             session.query(tileFeatures)
+#             .filter(tileFeatures.ftxtract_id == ftxtract_id)
+#             # .filter(tileFeatures.imageId == imageId)
+#             .options(
+#                 load_only(
+#                     tileFeatures.imageId,
+#                     tileFeatures.topX,
+#                     tileFeatures.topY,
+#                     tileFeatures.width,
+#                     tileFeatures.height,
+#                     tileFeatures.average,
+#                     tileFeatures.localTileId,
+#                 )
+#             )
+#             .limit(10000)
+#             .all()
+#         )
+#         return tileData
+
+#     return None
+
+
+def update_object_count(feature_set_id: int, record_count: int) -> int:
+    with Session(engine) as session:
+        dsa_feature_set = (
+            session.query(DSAFeatureSetFile)
+            .filter(DSAFeatureSetFile.id == feature_set_id)
+            .first()
+        )
+        dsa_feature_set.objectCount = record_count
+        session.commit()
+        session.refresh(dsa_feature_set)
+        return dsa_feature_set.objectCount
+    # dsa_feature_set = (
+    #     db.exec(DSAFeatureSetFile)
+    #     .filter(DSAFeatureSetFile.id == feature_set_id)
+    #     .first()
+    # )
+    # dsa_feature_set.objectCount = record_count
+    # db.commit()
+    # db.refresh(dsa_feature_set)
+    # return dsa_feature_set.objectCount
+
+
 @app.post("/insertVandyCellFeatures")
 async def insert_vandy_cell_features(vandy_features: List[VandyCellFeatures]):
     # Process and store the vandy_features in the database
     # Replace this with your actual database storage logic
+
+    vandyCellData = [cell_obj.dict() for cell_obj in vandy_features]
+
     with Session(engine) as session:
-        for feature in vandy_features:
-            session.add(feature)
-            session.commit()
-        return "Inserted sample record"
-        #     session.bulk_insert_mappings(VandyCellFeatures, cellData)
+        # stmt = insert(VandyCellFeatures).values(vandyCellData)
+        # # stmt = stmt.on_conflict_do_nothing(constraint="idx_unique_cellObject")
+        # stmt = stmt.on_conflict_do_nothing(
+        #     index_elements=["featureSetId", "localFeatureId"]
+        # )
+        # session.exec(stmt)
+        # session.commit()
+        # return len(vandy_features), "Inserted sample record"
+
+        result = session.bulk_insert_mappings(VandyCellFeatures, vandyCellData)
+        # # session._bulk_save_mappings(vandy_features, return_defaults=True)
+        # # for feature in vandy_features:
+        # #     session.add(feature)
+        # print("About to insert", len(vandy_features), "records")
+        session.commit()
+        # inserted_count = result.rowcount
+        # print("Successfully inserted", inserted_count, "records")
+        # return {"inserted_count": inserted_count, "records_sent": len(vandy_features)}
+
+        # #     session.bulk_insert_mappings(VandyCellFeatures, cellData)
         #     session.commit()
 
         # Store the feature in the database
         # Example: feature.save_to_database()
-        pass
 
     return {"message": "VandyCellFeatures inserted successfully"}
 
@@ -133,6 +221,22 @@ async def insert_vandy_cell_features(vandy_features: List[VandyCellFeatures]):
 #     #     session.bulk_insert_mappings(VandyCellFeatures, cellData)
 #     #     session.commit()
 #     # return "Cell Feature Data added"
+
+
+@app.put("/update-featureSetFile-objectCount/{feature_set_id}")
+def update_object_count(
+    feature_set_id: int, db: Session = Depends(get_db)
+):  # , db: Session = Depends(get_db)):
+    # Get the count of records in the VandyCellFeatures table for the given featureSetId
+    record_count = get_vandyRecord_objectCount(db, feature_set_id)
+
+    # Update the objectCount field in the DSAFeatureSetFile table
+    updated_count = update_object_count(db, feature_set_id, record_count)
+
+    return {
+        "message": "Object count updated successfully",
+        "updated_count": updated_count,
+    }
 
 
 @app.delete("/deleteTileFeatures")
@@ -602,3 +706,23 @@ async def get_imageList():
 #         to_return["address"] = station.adress
 
 #         return to_return
+
+# from sqlalchemy.dialects.postgresql import insert
+
+# stmt = insert(User).values(
+#     [
+#         dict(name="sandy", fullname="Sandy Cheeks"),
+#         dict(name="squidward", fullname="Squidward Tentacles"),
+#         dict(name="spongebob", fullname="Spongebob Squarepants"),
+#     ]
+# )
+
+# stmt = stmt.on_conflict_do_update(
+#     index_elements=[User.name], set_=dict(fullname=stmt.excluded.fullname)
+# ).returning(User)
+
+# orm_stmt = select(User).from_statement(stmt).execution_options(populate_existing=True)
+# for user in session.execute(
+#     orm_stmt,
+# ).scalars():
+#     print("inserted or updated: %s" % user)

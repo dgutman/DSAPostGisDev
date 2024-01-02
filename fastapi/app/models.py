@@ -9,6 +9,7 @@ from sqlalchemy import UniqueConstraint, Column, String
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.dialects.postgresql import ARRAY
 from typing import Dict
+from sqlalchemy import Index
 
 
 class MutableVector(Mutable, list):
@@ -58,8 +59,9 @@ class DSAImage(SQLModel, table=True, extend_existing=True):
 The Stain_Marker_Embeddings are stored in the feature extraction parameters"""
 
 
-class VandyCellFeatures(SQLModel, table=True, extend_existing=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+## removed default=None from all fields
+class VandyCellFeatures(SQLModel, table=True, extend_existing=True, autoincrement=True):
+    id: Optional[int] = Field(primary_key=True)
     featureSetId: int
     localFeatureId: int
     UniqueID: str
@@ -74,44 +76,34 @@ class VandyCellFeatures(SQLModel, table=True, extend_existing=True):
     Stain_Marker_Embeddings: List[float] = Field(
         sa_column=Column(Vector(224))  # , server_default="{}")
     )
-    #   Stain_Marker_Embeddings: List[float] = Field(
-    #     sa_column=Column(ARRAY(Float), server_default="{}")
-    # )
 
-    # Field(sa_column=Column(Vector(50)))
+    __table_args__ = (
+        Index("idx_unique_cellObject", "featureSetId", "localFeatureId", unique=True),
+    )
 
     @classmethod
     def from_dict(cls, data: dict):
         converted_data = {}
         for key, value in data.items():
-            if key != "Stain_Marker_Embeddings":
+            if key == "Stain_Marker_Embeddings":
+                expected_length = 224  # Update this with the desired length
+                padded_embeddings = value + [0.0] * (expected_length - len(value))
+                converted_data[key] = padded_embeddings
+            else:
                 try:
                     converted_data[key] = float(value)
                 except ValueError:
                     converted_data[key] = value
-            else:
-                converted_data[key] = value
         return cls(**converted_data)
 
-    # @classmethod
-    # def from_dict(cls, data: dict):
-    #     for key, value in data.items():
-    #         if key != "Stain_Marker_Embeddings":
-    #             try:
-    #                 setattr(cls, key, float(value))
-    #             except ValueError:
-    #                 setattr(cls, key, value)
-    #         else:
-    #             setattr(cls, key, value)
-    #     return cls(**data)
-    def to_dict_padded(self) -> Dict[str, any]:
-        expected_length = 50  # Update this with the desired length
-        padded_embeddings = self.Stain_Marker_Embeddings + [0.0] * (
-            expected_length - len(self.Stain_Marker_Embeddings)
-        )
-        data_dict = self.to_dict()
-        data_dict["Stain_Marker_Embeddings"] = padded_embeddings
-        return data_dict
+    # def to_dict_padded(self) -> Dict[str, any]:
+    #     expected_length = 224  # Update this with the desired length
+    #     padded_embeddings = self.Stain_Marker_Embeddings + [0.0] * (
+    #         expected_length - len(self.Stain_Marker_Embeddings)
+    #     )
+    #     data_dict = self.to_dict()
+    #     data_dict["Stain_Marker_Embeddings"] = padded_embeddings
+    #     return data_dict
 
     def to_dict(self):
         return {
